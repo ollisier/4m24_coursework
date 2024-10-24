@@ -39,22 +39,23 @@ def probit(v):
 
 
 def predict_t(samples):
-    return # TODO: Return p(t=1|samples)
+    return 1/len(samples) * sum([probit(u) for u in samples])
 
 
 ###--- Density functions ---###
 
 def log_prior(u, K_inverse):
-    return # TODO: Return log p(u)
+    return -0.5*(u.T@K_inverse@u)
 
 
 def log_continuous_likelihood(u, v, G):
-    return # TODO: Return observation likelihood p(v|u)
+    mu = G@u
+    return -0.5*((v - mu).T@(v - mu))
 
 
 def log_probit_likelihood(u, t, G):
     phi = norm.cdf(G @ u)
-    return # TODO: Return likelihood p(t|u)
+    return sum(np.log(t*phi + (1-t)*(1-phi))) # TODO: Return likelihood p(t|u)
 
 
 def log_poisson_likelihood(u, c, G):
@@ -75,7 +76,7 @@ def log_poisson_target(u, c, K_inverse, G):
 
 ###--- MCMC ---###
 
-def grw(log_target, u0, data, K, G, n_iters, beta):
+def grw(log_target, u0, y, K, G, n_iters, beta):
     """ Gaussian random walk Metropolis-Hastings MCMC method
         for sampling from pdf defined by log_target.
     Inputs:
@@ -95,23 +96,27 @@ def grw(log_target, u0, data, K, G, n_iters, beta):
     u_prev = u0
 
     # Inverse computed before the for loop for speed
+    N = len(u0)
     Kc = np.linalg.cholesky(K + 1e-6 * np.eye(N))
     Kc_inverse = np.linalg.inv(Kc)
-    K_inverse = None # TODO: compute the inverse of K using its Cholesky decomopsition
+    K_inverse = Kc_inverse.T @ Kc_inverse
 
-    lt_prev = log_target(u_prev, data, K_inverse, G)
+    lt_prev = log_target(u_prev, y, K_inverse, G)
 
     for i in range(n_iters):
 
-        u_new = None # TODO: Propose new sample - use prior covariance, scaled by beta
+        u_new = u_prev + beta*Kc@np.random.randn(N)  # TODO: Propose new sample - use prior covariance, scaled by beta
 
-        lt_new = log_target(u_new, data, K_inverse, G)
+        lt_new = log_target(u_new, y, K_inverse, G)
 
-        log_alpha = None # TODO: Calculate acceptance probability based on lt_prev, lt_new
+        log_alpha = min(
+            0, 
+            lt_new - lt_prev
+        )
         log_u = np.log(np.random.random())
 
         # Accept/Reject
-        accept = None # TODO: Compare log_alpha and log_u to accept/reject sample (accept should be boolean)
+        accept = log_u < log_alpha
         if accept:
             acc += 1
             X.append(u_new)
@@ -141,19 +146,23 @@ def pcn(log_likelihood, u0, y, K, G, n_iters, beta):
     acc = 0
     u_prev = u0
 
+    # Inverse computed before the for loop for speed
+    N = len(u0)
+    Kc = np.linalg.cholesky(K + 1e-6 * np.eye(N))
+
     ll_prev = log_likelihood(u_prev, y, G)
 
     for i in range(n_iters):
 
-        u_new = None # TODO: Propose new sample using pCN proposal
+        u_new = np.sqrt(1-beta**2)*u_prev + beta*Kc@np.random.randn(N)  # TODO: Propose new sample using pCN proposal
 
         ll_new = log_likelihood(u_new, y, G)
 
-        log_alpha = None # TODO: Calculate pCN acceptance probability
+        log_alpha = min(0, ll_new - ll_prev) # TODO: Calculate pCN acceptance probability
         log_u = np.log(np.random.random())
 
         # Accept/Reject
-        accept = None # TODO: Compare log_alpha and log_u to accept/reject sample (accept should be boolean)
+        accept = log_u < log_alpha # TODO: Compare log_alpha and log_u to accept/reject sample (accept should be boolean)
         if accept:
             acc += 1
             X.append(u_new)
