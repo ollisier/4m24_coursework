@@ -2,6 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.spatial import distance_matrix
 from scipy.stats import norm
+from scipy.special import factorial
+from scipy.signal import correlate
 import matplotlib.cm as cm
 import copy
 
@@ -35,31 +37,45 @@ def get_G(N, idx):
 
 
 def probit(v):
-    return np.array([0 if x < 0 else 1 for x in v])
+    return (v > 0).astype(int)
 
 
 def predict_t(samples):
-    return 1/len(samples) * sum([probit(u) for u in samples])
+    phi = norm.cdf(samples)
+    return np.mean(phi, axis=1)
 
+
+def predict_t_true(samples):
+    return np.mean(probit(samples), axis=1)
+
+
+def autocorrelation(samples, max_lag):
+    N = samples.shape[0]
+    num_iters = samples.shape[1]
+    autocorrelation = np.zeros((N, N, max_lag))
+    for i in range(N):
+        for j in range(N):
+            autocorrelation[i,j,:] = ((correlate(samples[i, :]-np.mean(samples[i, :]), samples[j, :]-np.mean(samples[j, :]), mode='full')[num_iters-1:])/np.arange(num_iters, 0, -1)/(np.std(samples[i, :])*np.std(samples[j, :])))[:max_lag]
+    return autocorrelation
 
 ###--- Density functions ---###
 
 def log_prior(u, K_inverse):
-    return -0.5*(u.T@K_inverse@u)
+    return -0.5 * u.T @ K_inverse @ u # + constant
 
 
 def log_continuous_likelihood(u, v, G):
-    mu = G@u
-    return -0.5*((v - mu).T@(v - mu))
+    return -0.5 * (v - G@u).T @ (v - G@u) # + constant
 
 
 def log_probit_likelihood(u, t, G):
     phi = norm.cdf(G @ u)
-    return sum(np.log(t*phi + (1-t)*(1-phi))) # TODO: Return likelihood p(t|u)
+    return np.sum(t*np.log(phi) + (1-t)*np.log(1-phi))
 
 
 def log_poisson_likelihood(u, c, G):
-    return # TODO: Return likelihood p(c|u)
+    theta = np.exp(G @ u)
+    return np.sum(-theta + c * np.log(theta) - np.log(factorial(c)))# TODO: Return likelihood p(c|u)
 
 
 def log_continuous_target(u, y, K_inverse, G):
@@ -76,100 +92,91 @@ def log_poisson_target(u, c, K_inverse, G):
 
 ###--- MCMC ---###
 
-def grw(log_target, u0, y, K, G, n_iters, beta):
+def grw(log_target, u0, K, n_iters, beta):
     """ Gaussian random walk Metropolis-Hastings MCMC method
         for sampling from pdf defined by log_target.
     Inputs:
         log_target - log-target density
         u0 - initial sample
-        y - observed data
         K - prior covariance
-        G - observation matrix
         n_iters - number of samples
         beta - step-size parameter
     Returns:
         X - samples from target distribution
         acc/n_iters - the proportion of accepted samples"""
 
-    X = []
     acc = 0
     u_prev = u0
-
-    # Inverse computed before the for loop for speed
     N = len(u0)
-    Kc = np.linalg.cholesky(K + 1e-6 * np.eye(N))
-    Kc_inverse = np.linalg.inv(Kc)
-    K_inverse = Kc_inverse.T @ Kc_inverse
+    X = np.zeros((N, n_iters))
 
-    lt_prev = log_target(u_prev, y, K_inverse, G)
+    # Cholesky computed before the for loop for speed
+    Kc = np.linalg.cholesky(K + 1e-6 * np.eye(N))
+
+    lt_prev = log_target(u_prev)
 
     for i in range(n_iters):
 
-        u_new = u_prev + beta*Kc@np.random.randn(N)  # TODO: Propose new sample - use prior covariance, scaled by beta
+        u_new = u_prev + beta*Kc@np.random.randn(N)
 
-        lt_new = log_target(u_new, y, K_inverse, G)
+        lt_new = log_target(u_new)
 
-        log_alpha = min(
-            0, 
-            lt_new - lt_prev
-        )
+        log_alpha = np.min(lt_new - lt_prev, 0)
         log_u = np.log(np.random.random())
 
         # Accept/Reject
         accept = log_u < log_alpha
         if accept:
             acc += 1
-            X.append(u_new)
+            X[:,i] = u_new
             u_prev = u_new
             lt_prev = lt_new
         else:
-            X.append(u_prev)
+            X[:,i] = u_new
 
     return X, acc / n_iters
 
 
-def pcn(log_likelihood, u0, y, K, G, n_iters, beta):
+def pcn(log_likelihood, u0, K, n_iters, beta):
     """ pCN MCMC method for sampling from pdf defined by log_prior and log_likelihood.
     Inputs:
         log_likelihood - log-likelihood function
         u0 - initial sample
-        y - observed data
         K - prior covariance
-        G - observation matrix
         n_iters - number of samples
         beta - step-size parameter
     Returns:
         X - samples from target distribution
         acc/n_iters - the proportion of accepted samples"""
 
-    X = []
     acc = 0
     u_prev = u0
+    N = len(u0)
+    X = np.zeros((N, n_iters))
 
     # Inverse computed before the for loop for speed
-    N = len(u0)
     Kc = np.linalg.cholesky(K + 1e-6 * np.eye(N))
 
-    ll_prev = log_likelihood(u_prev, y, G)
+    ll_prev = log_likelihood(u_prev)
 
     for i in range(n_iters):
 
-        u_new = np.sqrt(1-beta**2)*u_prev + beta*Kc@np.random.randn(N)  # TODO: Propose new sample using pCN proposal
+        u_new = np.sqrt(1-beta**2) * u_prev + beta*Kc@np.random.randn(N)
 
-        ll_new = log_likelihood(u_new, y, G)
+        ll_new = log_likelihood(u_new)
 
-        log_alpha = min(0, ll_new - ll_prev) # TODO: Calculate pCN acceptance probability
+        log_alpha = np.min(ll_new - ll_prev, 0)
         log_u = np.log(np.random.random())
 
         # Accept/Reject
-        accept = log_u < log_alpha # TODO: Compare log_alpha and log_u to accept/reject sample (accept should be boolean)
+        accept = log_u < log_alpha
         if accept:
             acc += 1
-            X.append(u_new)
+            X[:,i] = u_new
             u_prev = u_new
             ll_prev = ll_new
         else:
-            X.append(u_prev)
+            X[:,i] = u_new
 
     return X, acc / n_iters
 
@@ -181,8 +188,9 @@ def plot_3D(u, x, y, title=None):
     fig = plt.figure()
     ax = fig.add_subplot(projection='3d')
     ax.plot_trisurf(x, y, u, cmap='viridis', linewidth=0, antialiased=False)
+    fig.tight_layout()
     if title:  plt.title(title)
-    plt.show()
+    return fig
 
 
 def plot_2D(counts, xi, yi, title=None, colors='viridis'):
@@ -195,8 +203,9 @@ def plot_2D(counts, xi, yi, title=None, colors='viridis'):
     fig, ax = plt.subplots()
     im = ax.imshow(Z, origin='lower', cmap=my_cmap, clim=[-0.1, np.max(counts)])
     fig.colorbar(im)
+    fig.tight_layout()
     if title:  plt.title(title)
-    plt.show()
+    return fig
 
 
 def plot_result(u, data, x, y, x_d, y_d, title=None):
@@ -207,5 +216,6 @@ def plot_result(u, data, x, y, x_d, y_d, title=None):
     ax = fig.add_subplot(projection='3d')
     ax.plot_trisurf(x, y, u, cmap='viridis', linewidth=0, antialiased=False)
     ax.scatter(x_d, y_d, data, marker='x', color='r')
+    fig.tight_layout()
     if title:  plt.title(title)
-    plt.show()
+    return fig

@@ -16,11 +16,10 @@ N = len(data)
 coords = [(xi[i],yi[i]) for i in range(N)]
 
 ### Subsample the original data set
-subsample_factor = 3
+subsample_factor = 10
 idx = subsample(N, subsample_factor, seed=42)
 G = get_G(N,idx)
 c = G @ data
-
 
 ###--- MCMC ---####
 
@@ -29,10 +28,16 @@ l = 2
 n = 10000
 beta = 0.2
 
+K = GaussianKernel(coords, l)
+Kc = np.linalg.cholesky(K + 1e-6 * np.eye(N))
+
 ### Set the likelihood and target, for sampling p(u|c)
 log_target = log_poisson_target
 log_likelihood = log_poisson_likelihood
 
+
+u0 = Kc@np.random.randn(N)
+u_samples, acc = pcn(log_poisson_likelihood, u0, c, K, G, n, beta)
 
 # TODO: Complete Spatial Data questions (e), (f).
 
@@ -40,3 +45,5 @@ log_likelihood = log_poisson_likelihood
 ### Plotting examples
 plot_2D(data, xi, yi, title='Bike Theft Data')                   # Plot bike theft count data
 plot_2D(c, xi[idx], yi[idx], title='Subsampled Data')      # Plot subsampled data
+plot_2D(np.mean(np.exp(u_samples), axis=1), xi, yi, title='Bike Theft Data')                   # Plot bike theft count data
+plt.show()

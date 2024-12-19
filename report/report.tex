@@ -1,7 +1,88 @@
-\documentclass[12pt]{article}
+\documentclass[11pt]{article}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{subcaption}
+\usepackage{graphicx}
+\usepackage[margin=0.5in]{geometry}
+
+\graphicspath{{../figures/}}
+\renewcommand{\thesubsection}{\alph{subsection}}
+
+\title{4M24 CW - High-Dimensional MCMC}
+\author{Candidate Number: 5488A}
+\date{December 2024}
+
 \begin{document}
-Hello world!
 
+\maketitle
 
-$Hello world!$ %math mode 
+\section{Simulation}
+\subsection{Gaussian Process Prior}
+Our prior is a Gaussian Process has zero mean and a squared exponential covariance kernel, $k(\boldsymbol{x}, \boldsymbol{x}')$, with length scale $\ell$. The coordinates, $\{\boldsymbol{x_n}\}_{n=1}^{N}$, of our samples at placed on a regular $D \times D$ grid in $[0, 1]^2$. 
+\begin{equation}
+    k(\boldsymbol{x}, \boldsymbol{x}') = \exp\left(-\frac{\|\boldsymbol{x} - \boldsymbol{x}'\|^2}{2\ell^2}\right)
+\end{equation}
+Our samples, $\boldsymbol{u}$, collected into an $N \times 1$ vector and is distributed $\boldsymbol{u} \sim \mathcal{N}(\boldsymbol{0}, C)$, where $C$ is the $N \times N$ covariance matrix with entries $C_{ij} = k(\boldsymbol{x_i}, \boldsymbol{x_j})$.
+
+Samples from this prior are shown in Figure \ref{fig:gp_prior} for 3 values of $\ell$. Larger values result in a smoother surface with more correlation between nearby points.
+
+\begin{figure}
+    \centering
+    \begin{subfigure}{0.3\textwidth}
+        \includegraphics[width=\textwidth]{simulation/prior_l=0.1}
+        \subcaption{$\ell = 0.1$}
+    \end{subfigure}
+    \begin{subfigure}{0.3\textwidth}
+        \includegraphics[width=\textwidth]{simulation/prior_l=0.3}
+        \subcaption{$\ell = 0.3$}
+    \end{subfigure}
+    \begin{subfigure}{0.3\textwidth}
+        \includegraphics[width=\textwidth]{simulation/prior_l=1}
+        \subcaption{$\ell = 1$}
+    \end{subfigure}
+    \caption{Samples from the Gaussian Process Prior}
+    \label{fig:gp_prior}
+\end{figure}
+
+We subsample the grid with $M$ uniform random draws and apply independent Gaussian measurement noise, $\boldsymbol{\epsilon}$, to the observations. This subsampling can be captured by the matrix $M \times N$ matrix $G$ with entries $G_{ij} = 1$ if the $i$th observation is at the $j$th grid point and $0$ otherwise. The observations, $\boldsymbol{v}$. We also define the subsampling factor $f := N/M$. 
+\begin{equation}
+    \boldsymbol{v} = G\boldsymbol{u} + \boldsymbol{\epsilon} \quad \boldsymbol{\epsilon} \sim \mathcal{N}(\boldsymbol{0}, I)
+\end{equation}
+One sample is produced from this model with $D=16$, $f=4$ and $\ell=0.3$ to be used as our dataset for the analysis within this section. Figure \ref{fig:dataset} shows the latent surface, $\boldsymbol{u}$, and $M = \frac{N}{f} = 64$ noisy observations, $\boldsymbol{v}$. 
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.5\textwidth]{simulation/data}
+    \caption{Simulated dataset: $\boldsymbol{v}$ - red crosses, $\boldsymbol{u}$ - surface}
+    \label{fig:dataset}
+\end{figure}
+
+\subsection{Likelihoods and MCMC}
+We now proceed to infer the latent surface, $\boldsymbol{u}$, from the noisy observations, $\boldsymbol{v}$, using MCMC. To compute our posterior we need to evaluate the likelihood, $p(\boldsymbol{v} | \boldsymbol{u})$, and the prior, $p(\boldsymbol{u})$. The form of the prior was given previously but is repeated below and its logarithm can be computed with simple algegbraic manimpulation.
+\begin{equation}
+    \begin{aligned}
+        \boldsymbol{u} &\sim \mathcal{N}(\boldsymbol{0}, K) \\
+        \ln p(\boldsymbol{u}) &= - \frac{N}{2}\ln(2\pi) - \frac{1}{2}\ln(|K|) - \frac{1}{2} \boldsymbol{v}^T K^{-1} \boldsymbol{v} \\
+          &= - \frac{1}{2} \boldsymbol{v}^T K^{-1} \boldsymbol{v} + \text{const} \\
+    \end{aligned}
+\end{equation}
+
+Likewise the likelihood is given below.
+\begin{equation}
+    \begin{aligned}
+        \boldsymbol{v} | \boldsymbol{u} &\sim \mathcal{N}(G\boldsymbol{u}, I) \\
+        \ln p(\boldsymbol{v} | \boldsymbol{u}) &= - \frac{M}{2}\ln(2\pi) - \frac{1}{2}\ln(|I|) - \frac{1}{2}(\boldsymbol{v} - G\boldsymbol{u})^T (\boldsymbol{v} - G\boldsymbol{u}) \\
+          &= - \frac{1}{2}(\boldsymbol{v} - G\boldsymbol{u})^T (\boldsymbol{v} - G\boldsymbol{u}) + \text{const} \\
+    \end{aligned}
+\end{equation}
+
+Computation of the posterior is straightforward using Baye's rule. Note that we only need to compute the log-prior and log-likelihood up to a constant which greatly saves on computation.
+\begin{equation}
+    p(\boldsymbol{u} | \boldsymbol{v}) \propto p(\boldsymbol{v} | \boldsymbol{u}) p(\boldsymbol{u}) \therefore \ln p(\boldsymbol{u} | \boldsymbol{v}) = \ln p(\boldsymbol{v} | \boldsymbol{u}) + \ln p(\boldsymbol{u}) + \text{const}
+\end{equation}
+
+We now consider two MCMC algorithms for generating samples from the posterior.
+
+\subsubsection{Gaussian random walk Metropolis-Hastings}
 \end{document}
