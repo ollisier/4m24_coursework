@@ -52,10 +52,9 @@ def predict_t_true(samples):
 def autocorrelation(samples, max_lag):
     N = samples.shape[0]
     num_iters = samples.shape[1]
-    autocorrelation = np.zeros((N, N, max_lag))
+    autocorrelation = np.zeros((N, max_lag))
     for i in range(N):
-        for j in range(N):
-            autocorrelation[i,j,:] = ((correlate(samples[i, :]-np.mean(samples[i, :]), samples[j, :]-np.mean(samples[j, :]), mode='full')[num_iters-1:])/np.arange(num_iters, 0, -1)/(np.std(samples[i, :])*np.std(samples[j, :])))[:max_lag]
+        autocorrelation[i,:] = ((correlate(samples[i, :]-np.mean(samples[i, :]), samples[i, :]-np.mean(samples[i, :]), mode='full')[num_iters-1:])/np.arange(num_iters, 0, -1)/(np.std(samples[i, :])*np.std(samples[i, :])))[:max_lag]
     return autocorrelation
 
 ###--- Density functions ---###
@@ -132,7 +131,7 @@ def grw(log_target, u0, K, n_iters, beta):
             u_prev = u_new
             lt_prev = lt_new
         else:
-            X[:,i] = u_new
+            X[:,i] = u_prev
 
     return X, acc / n_iters
 
@@ -176,7 +175,7 @@ def pcn(log_likelihood, u0, K, n_iters, beta):
             u_prev = u_new
             ll_prev = ll_new
         else:
-            X[:,i] = u_new
+            X[:,i] = u_prev
 
     return X, acc / n_iters
 

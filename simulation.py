@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from functions import *
 from tqdm import tqdm
 from pathlib import Path
+import time
 
 def generate_data(D, l, subsample_factor):
     Dx = D
@@ -39,6 +40,76 @@ def prior_sample_plots(fig_folder):
         fig = plot_3D(u, x, y)
         fig.savefig(fig_folder / f'prior_l={l}.pdf')        
 
+def log_marginal_likelihood(log_likelihood, Kc, N, T):
+    z = np.random.randn(N, T)
+    u = Kc @ z
+    log_likelihoods = np.zeros(T)
+    for i in range(T):
+        log_likelihoods[i] = log_likelihood(u[:, i])
+    return np.log(np.exp(log_likelihoods).mean())
+    
+def beta_effect(fig_folder):
+    l = 0.3
+    subsample_factor = 4
+    T = 100000
+    max_lag = 1000
+
+    betas = np.linspace(0.01, 1, 30)
+    Ds = np.array([4,16])
+    
+    acc_grw = np.zeros((len(Ds), len(betas)))
+    acc_pcn = np.zeros((len(Ds), len(betas)))
+    autocorrelation_coefficient_grw = np.zeros((len(Ds), len(betas)))
+    autocorrelation_coefficient_pcn = np.zeros((len(Ds), len(betas)))
+
+    for w, D in enumerate([4,16]):
+        x, y, u, v, K, G, idx, N, M = generate_data(D, l, subsample_factor)
+
+        Kc = np.linalg.cholesky(K + 1e-6 * np.eye(N))
+        Kc_inverse = np.linalg.inv(Kc)
+        K_inverse = Kc_inverse.T @ Kc_inverse
+        u0 = Kc@np.random.randn(N)
+        
+        for i, beta in enumerate(tqdm(betas, desc='Beta Sweep')):
+            u_samples_grw, acc_grw[w, i] = grw(lambda u: log_continuous_target(u, v, K_inverse, G), u0, K, T, beta)
+            u_samples_pcn, acc_pcn[w, i] = pcn(lambda u: log_continuous_likelihood(u, v, G), u0, K, T, beta)
+            
+            auto_grw = autocorrelation(u_samples_grw, max_lag)
+            for j in range(N):
+                if (auto_grw[j,:] < 0.1).any():
+                    k = np.where(auto_grw[j,:] < 0.1)[0].min()
+                else:
+                    k = max_lag
+                autocorrelation_coefficient_grw[w, i] += auto_grw[j,:k].sum()
+                
+            auto_pcn = autocorrelation(u_samples_pcn, max_lag)
+            for j in range(N):
+                if (auto_pcn[j,:] < 0.1).any():
+                    k = np.where(auto_pcn[j,:] < 0.1)[0].min()
+                else:
+                    k = max_lag
+                autocorrelation_coefficient_pcn[w, i] += auto_pcn[j,:k].sum()
+                
+    fig, ax = plt.subplots()
+    for i, D in enumerate(Ds):
+        ax.plot(betas, autocorrelation_coefficient_grw[i,:], label=f'GRW, D={D}')
+        ax.plot(betas, autocorrelation_coefficient_pcn[i,:], label=f'PCN, D={D}')
+    ax.set_xlabel('beta')
+    ax.set_ylabel('Autocorrelation coefficient')
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(fig_folder / 'autocorrelation.pdf')
+    
+    fig, ax = plt.subplots()
+    for i, D in enumerate(Ds):
+        ax.plot(betas, acc_grw[i,:]*100, label=f'GRW, D={D}')
+        ax.plot(betas, acc_pcn[i,:]*100, label=f'PCN, D={D}')
+    ax.set_xlabel('beta')
+    ax.set_ylabel('Acceptance rate (%)')
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(fig_folder / 'acceptance_rate.pdf')
+
 def main(fig_folder):
     np.random.seed(0)
     
@@ -48,7 +119,7 @@ def main(fig_folder):
     # Generate data
     D = 16
     l = 0.3
-    subsample_factor = 4
+    subsample_factor = 1
     
     x, y, u, v, K, G, idx, N, M = generate_data(D, l, subsample_factor)
     xi, yi = np.meshgrid(np.arange(D, dtype=np.uint32), np.arange(D, dtype=np.uint32))                               # Get x, y index lists
@@ -64,37 +135,82 @@ def main(fig_folder):
     K_inverse = Kc_inverse.T @ Kc_inverse
     u0 = Kc@np.random.randn(N)
 
-    # # Beta effect
-    # T = 10000
-    # betas = np.linspace(0, 1, 20)
-    # acc_grw = np.zeros_like(betas)
-    # acc_pcn = np.zeros_like(betas)
-    
-    # plt.figure()
-    # for i, beta in enumerate(tqdm(betas, desc='Beta Sweep')):
-    #     _, acc_grw[i] = grw(lambda u: log_continuous_target(u, v, K_inverse, G), u0, K, T, beta)
-    #     _, acc_pcn[i] = pcn(lambda u: log_continuous_likelihood(u, v, G), u0, K, T, beta)
-        
-    # fig, ax = plt.subplots()
-    # ax.plot(betas, acc_grw*100, label='GRW')
-    # ax.plot(betas, acc_pcn*100, label='PCN')
-    # ax.set_xlabel('beta')
-    # ax.set_ylabel('Acceptance rate (%)')
-    # ax.legend()
-    # fig.tight_layout()
-    # fig.savefig(fig_folder / 'acceptance_rate.pdf')
+    # Beta/D sweep
+    T = 100000
+    betas = np.linspace(0.01, 1, 30)
+    Ds = np.array([4,16])
+    acc_grw = np.zeros((len(Ds), len(betas)))
+    acc_pcn = np.zeros((len(Ds), len(betas)))
+    autocorrelation_coefficient_grw = np.zeros((len(Ds), len(betas)))
+    autocorrelation_coefficient_pcn = np.zeros((len(Ds), len(betas)))
 
-    # # Mean field inference
-    # T = 1_000_000
-    # beta = 0.2
+    max_lag = 1000
+    for w, d in enumerate([4,16]):
+        x, y, u, v, K, G, idx, N, M = generate_data(d, l, subsample_factor)
+
+        Kc = np.linalg.cholesky(K + 1e-6 * np.eye(N))
+        Kc_inverse = np.linalg.inv(Kc)
+        K_inverse = Kc_inverse.T @ Kc_inverse
+        u0 = Kc@np.random.randn(N)
+        
+        for i, beta in enumerate(tqdm(betas, desc='Beta Sweep')):
+            u_samples_grw, acc_grw[w, i] = grw(lambda u: log_continuous_target(u, v, K_inverse, G), u0, K, T, beta)
+            u_samples_pcn, acc_pcn[w, i] = pcn(lambda u: log_continuous_likelihood(u, v, G), u0, K, T, beta)
+            
+            auto_grw = autocorrelation(u_samples_grw, max_lag)
+            for j in range(N):
+                if (auto_grw[j,:] < 0.1).any():
+                    k = np.where(auto_grw[j,:] < 0.1)[0].min()
+                else:
+                    k = max_lag
+                autocorrelation_coefficient_grw[w, i] += auto_grw[j,:k].sum()
+                
+            auto_pcn = autocorrelation(u_samples_pcn, max_lag)
+            for j in range(N):
+                if (auto_pcn[j,:] < 0.1).any():
+                    k = np.where(auto_pcn[j,:] < 0.1)[0].min()
+                else:
+                    k = max_lag
+                autocorrelation_coefficient_pcn[w, i] += auto_pcn[j,:k].sum()
+        
     
-    # u_samples_grw, acc_grw = grw(lambda u: log_continuous_target(u, v, K_inverse, G), u0, K, T, beta)
-    # print('Acceptance rate GRW: ', acc_grw)
-    # process_mc_results(x, y, u, u_samples_grw, fig_folder, 'grw')
-      
-    # u_samples_pcn, acc_pcn = pcn(lambda u: log_continuous_likelihood(u, v, G), u0, K, T, beta)
-    # print('Acceptance rate PCN: ', acc_pcn)
-    # process_mc_results(x, y, u, u_samples_pcn, fig_folder, 'pcn')
+    fig, ax = plt.subplots()
+    ax.plot(betas, autocorrelation_coefficient_grw[0,:], label='GRW, D=4')
+    ax.plot(betas, autocorrelation_coefficient_grw[1,:], label='GRW, D=16')
+    ax.plot(betas, autocorrelation_coefficient_pcn[0,:], label='PCN, D=4')
+    ax.plot(betas, autocorrelation_coefficient_pcn[1,:], label='PCN, D=16')
+    ax.set_xlabel('beta')
+    ax.set_ylabel('Autocorrelation coefficient')
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(fig_folder / 'autocorrelation.pdf')
+    
+    fig, ax = plt.subplots()
+    ax.plot(betas, acc_grw[0,:]*100, label='GRW, D=4')
+    ax.plot(betas, acc_grw[1,:]*100, label='GRW, D=16')
+    ax.plot(betas, acc_pcn[0,:]*100, label='PCN, D=4')
+    ax.plot(betas, acc_pcn[1,:]*100, label='PCN, D=16')
+    ax.set_xlabel('beta')
+    ax.set_ylabel('Acceptance rate (%)')
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(fig_folder / 'acceptance_rate.pdf')
+
+    # Mean field inference
+    T = 1_000_000
+    beta = 0.2
+    
+    start = time.time()
+    u_samples_grw, acc_grw = grw(lambda u: log_continuous_target(u, v, K_inverse, G), u0, K, T, beta)
+    total_time_grw = time.time() - start
+    print(f'GRW - Acceptance rate: {acc_grw*100}%, Time per iteration: {total_time_grw/T}s')
+    process_mc_results(x, y, u, u_samples_grw, fig_folder, 'grw')
+    
+    start = time.time()
+    u_samples_pcn, acc_pcn = pcn(lambda u: log_continuous_likelihood(u, v, G), u0, K, T, beta)
+    total_time_pcn = time.time() - start
+    print(f'PCN - Acceptance rate: {acc_pcn*100}%, Time per iteration: {total_time_pcn/T}s')
+    process_mc_results(x, y, u, u_samples_pcn, fig_folder, 'pcn')
 
     # Probit observation
     t = probit(v)       # Probit transform of data
@@ -129,7 +245,8 @@ def main(fig_folder):
     error = np.zeros_like(ls)
     error_smooth = np.zeros_like(ls)
     error_data_only = np.zeros_like(ls)
-    
+    log_marginal_likelihoods = np.zeros_like(ls)
+
     for i, l in enumerate(tqdm(ls, desc='Length Scale Sweep')):
         K = GaussianKernel(np.stack([x, y], axis=1), l)
         Kc = np.linalg.cholesky(K + 1e-6 * np.eye(N))
@@ -146,11 +263,17 @@ def main(fig_folder):
         error[i] = np.mean((assignments_t_true - t_true)**2)
         error_smooth[i] = np.mean((posterior_t_true - t_true)**2)
         error_data_only[i] = np.mean((posterior_t[idx] - t)**2)
+        log_marginal_likelihoods[i] = log_marginal_likelihood(lambda u: log_probit_likelihood(u, t, G), Kc, N, 100000)
+
         
     fig, ax = plt.subplots()
     ax.plot(ls, error)
     ax.plot(ls, error_smooth)
     ax.plot(ls, error_data_only)
+    fig.tight_layout()
+    
+    fig, ax = plt.subplots()
+    ax.plot(ls, log_marginal_likelihoods)
     fig.tight_layout()
 
 
