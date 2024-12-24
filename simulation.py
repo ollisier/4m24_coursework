@@ -39,14 +39,6 @@ def prior_sample_plots(fig_folder):
         x, y, u, *_  = generate_data(D, l, subsample_factor)
         fig = plot_3D(u, x, y)
         fig.savefig(fig_folder / f'prior_l={l}.pdf')        
-
-def log_marginal_likelihood(log_likelihood, Kc, N, T):
-    z = np.random.randn(N, T)
-    u = Kc @ z
-    log_likelihoods = np.zeros(T)
-    for i in range(T):
-        log_likelihoods[i] = log_likelihood(u[:, i])
-    return np.log(np.exp(log_likelihoods).mean())
     
 def beta_effect(fig_folder):
     l = 0.3
@@ -62,7 +54,7 @@ def beta_effect(fig_folder):
     autocorrelation_coefficient_grw = np.zeros((len(Ds), len(betas)))
     autocorrelation_coefficient_pcn = np.zeros((len(Ds), len(betas)))
 
-    for w, D in enumerate(tqdm([4,16], desc='Dimension Sweep')):
+    for w, D in enumerate(tqdm(Ds, desc='Dimension Sweep')):
         x, y, u, v, K, G, idx, N, M = generate_data(D, l, subsample_factor)
 
         Kc = np.linalg.cholesky(K + 1e-6 * np.eye(N))
@@ -124,7 +116,7 @@ def mesh_refinement(fig_folder):
     acc_pcn = np.zeros((len(mesh_refinements), len(betas)))
     
     T = 10000
-    for i, mesh_refinement in enumerate(tqdm(mesh_refinements)):
+    for i, mesh_refinement in enumerate(tqdm(mesh_refinements, desc='Mesh Refinement Sweep')):
         Dx = (D - 1) * mesh_refinement + 1
         Dy = Dx
         N_r = Dx * Dy                                                                  # Total number of coordinates
@@ -146,7 +138,7 @@ def mesh_refinement(fig_folder):
 
         G_r = get_G(N_r, idx_r)
         
-        for j, beta in enumerate(tqdm(betas, desc='Beta Sweep')):
+        for j, beta in enumerate(tqdm(betas, desc='Beta Sweep', leave=False)):
             _, acc_grw[i, j] = grw(lambda u: log_continuous_target(u, v, K_inverse_r, G_r), u0, K_r, T, beta)
             _, acc_pcn[i, j] = pcn(lambda u: log_continuous_likelihood(u, v, G_r), u0, K_r, T, beta)
             
@@ -204,17 +196,17 @@ def main(fig_folder):
     T = 1_000_000
     beta = 0.2
     
-    # start = time.time()
-    # u_samples_grw, acc_grw = grw(lambda u: log_continuous_target(u, v, K_inverse, G), u0, K, T, beta)
-    # total_time_grw = time.time() - start
-    # print(f'GRW - Acceptance rate: {acc_grw*100}%, Time per iteration: {total_time_grw/T}s')
-    # process_mc_results(x, y, u, u_samples_grw, fig_folder, 'grw')
+    start = time.time()
+    u_samples_grw, acc_grw = grw(lambda u: log_continuous_target(u, v, K_inverse, G), u0, K, T, beta)
+    total_time_grw = time.time() - start
+    print(f'GRW - Acceptance rate: {acc_grw*100}%, Time per iteration: {total_time_grw/T}s')
+    process_mc_results(x, y, u, u_samples_grw, fig_folder, 'grw')
     
-    # start = time.time()
-    # u_samples_pcn, acc_pcn = pcn(lambda u: log_continuous_likelihood(u, v, G), u0, K, T, beta)
-    # total_time_pcn = time.time() - start
-    # print(f'PCN - Acceptance rate: {acc_pcn*100}%, Time per iteration: {total_time_pcn/T}s')
-    # process_mc_results(x, y, u, u_samples_pcn, fig_folder, 'pcn')
+    start = time.time()
+    u_samples_pcn, acc_pcn = pcn(lambda u: log_continuous_likelihood(u, v, G), u0, K, T, beta)
+    total_time_pcn = time.time() - start
+    print(f'PCN - Acceptance rate: {acc_pcn*100}%, Time per iteration: {total_time_pcn/T}s')
+    process_mc_results(x, y, u, u_samples_pcn, fig_folder, 'pcn')
 
     # Probit observation
     t = probit(v)       # Probit transform of data

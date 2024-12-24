@@ -180,6 +180,14 @@ def pcn(log_likelihood, u0, K, n_iters, beta):
     return X, acc / n_iters
 
 
+def log_marginal_likelihood(log_likelihood, Kc, N, T):
+    z = np.random.randn(N, T)
+    u = Kc @ z
+    log_likelihoods = np.zeros(T)
+    for i in range(T):
+        log_likelihoods[i] = log_likelihood(u[:, i])
+    return np.log(np.exp(log_likelihoods).mean())
+
 ###--- Plotting ---###
 
 def plot_3D(u, x, y, title=None):
