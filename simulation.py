@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
 from functions import *
 from tqdm import tqdm
 from pathlib import Path
@@ -30,6 +31,9 @@ def process_mc_results(x, y, u, u_samples, fig_folder, run):
     E_u = np.mean(u_samples, axis=1)
     fig = plot_3D(E_u, x, y)
     fig.savefig(fig_folder / f'u_mean_{run}.pdf')
+    fig = plot_3D(E_u-u, x, y)
+    fig.savefig(fig_folder / f'u_error_{run}.pdf')
+    
 
 def prior_sample_plots(fig_folder):
     D = 16
@@ -49,10 +53,10 @@ def beta_effect(fig_folder):
     betas = np.linspace(0.01, 1, 30)
     Ds = np.array([2, 4, 8, 16])
     
-    acc_grw = np.zeros((len(Ds), len(betas)))
-    acc_pcn = np.zeros((len(Ds), len(betas)))
-    autocorrelation_coefficient_grw = np.zeros((len(Ds), len(betas)))
-    autocorrelation_coefficient_pcn = np.zeros((len(Ds), len(betas)))
+    acc_grw = np.zeros((len(betas), len(Ds)))
+    acc_pcn = np.zeros((len(betas), len(Ds)))
+    autocorrelation_coefficient_grw = np.zeros((len(betas), len(Ds)))
+    autocorrelation_coefficient_pcn = np.zeros((len(betas), len(Ds)))
 
     for w, D in enumerate(tqdm(Ds, desc='Dimension Sweep')):
         x, y, u, v, K, G, idx, N, M = generate_data(D, l, subsample_factor)
@@ -63,8 +67,8 @@ def beta_effect(fig_folder):
         u0 = Kc@np.random.randn(N)
         
         for i, beta in enumerate(tqdm(betas, desc='Beta Sweep', leave=False)):
-            u_samples_grw, acc_grw[w, i] = grw(lambda u: log_continuous_target(u, v, K_inverse, G), u0, K, T, beta)
-            u_samples_pcn, acc_pcn[w, i] = pcn(lambda u: log_continuous_likelihood(u, v, G), u0, K, T, beta)
+            u_samples_grw, acc_grw[i, w] = grw(lambda u: log_continuous_target(u, v, K_inverse, G), u0, K, T, beta)
+            u_samples_pcn, acc_pcn[i, w] = pcn(lambda u: log_continuous_likelihood(u, v, G), u0, K, T, beta)
             
             auto_grw = autocorrelation(u_samples_grw, max_lag)
             for j in range(N):
@@ -72,7 +76,7 @@ def beta_effect(fig_folder):
                     k = np.where(auto_grw[j,:] < 0.1)[0].min()
                 else:
                     k = max_lag
-                autocorrelation_coefficient_grw[w, i] += auto_grw[j,:k].sum()
+                autocorrelation_coefficient_grw[i, w] += auto_grw[j,:k].sum()
                 
             auto_pcn = autocorrelation(u_samples_pcn, max_lag)
             for j in range(N):
@@ -80,42 +84,57 @@ def beta_effect(fig_folder):
                     k = np.where(auto_pcn[j,:] < 0.1)[0].min()
                 else:
                     k = max_lag
-                autocorrelation_coefficient_pcn[w, i] += auto_pcn[j,:k].sum()
+                autocorrelation_coefficient_pcn[i, w] += auto_pcn[j,:k].sum()
                 
-    fig, ax = plt.subplots()
-    for i, D in enumerate(Ds):
-        ax.plot(betas, autocorrelation_coefficient_grw[i,:], label=f'GRW, D={D}', linestyle='-')
-        ax.plot(betas, autocorrelation_coefficient_pcn[i,:], label=f'PCN, D={D}', linestyle='--')
-    ax.set_xlabel('beta')
-    ax.set_ylabel('Autocorrelation coefficient')
-    ax.legend()
-    fig.tight_layout()
+    data = {
+        'beta': betas[:,np.newaxis,np.newaxis].repeat(len(Ds),1).repeat(2,2).flatten(),
+        'autocorrelation': np.concatenate([autocorrelation_coefficient_grw[:,:,np.newaxis], autocorrelation_coefficient_pcn[:,:,np.newaxis]], axis=2).flatten(),
+        'Dimension': Ds[np.newaxis,:,np.newaxis].repeat(len(betas),0).repeat(2,2).flatten(),
+        'Algorithm': np.array(['GRW-MH', 'PCN'])[np.newaxis,np.newaxis,:].repeat(len(betas),0).repeat(len(Ds),1).flatten()
+    }
+    ax = sns.lineplot(data, x='beta', y='autocorrelation', hue='Dimension', style='Algorithm')
+    ax.set(xlabel='$\\beta$', ylabel='Total Autocorrelation')
+    ax.set(yscale='log')
+    fig = ax.get_figure()
     fig.savefig(fig_folder / 'autocorrelation.pdf')
     
     fig, ax = plt.subplots()
-    for i, D in enumerate(Ds):
-        ax.plot(betas, acc_grw[i,:]*100, label=f'GRW, D={D}', linestyle='-')
-        ax.plot(betas, acc_pcn[i,:]*100, label=f'PCN, D={D}', linestyle='--')
-    ax.set_xlabel('beta')
-    ax.set_ylabel('Acceptance rate (%)')
+    optimal_betas_grw = betas[np.argmin(autocorrelation_coefficient_grw, axis=0)]
+    optimal_betas_pcn = betas[np.argmin(autocorrelation_coefficient_pcn, axis=0)]
+    ax.plot(Ds, optimal_betas_grw, label='GRW', linestyle='-')
+    ax.plot(Ds, optimal_betas_pcn, label='PCN', linestyle='--')
+    ax.set_xlabel('D')
+    ax.set_ylabel('Optimal $\\beta$')
     ax.legend()
     fig.tight_layout()
+    fig.savefig(fig_folder / 'optimal_beta.pdf')
+    
+    fig, ax = plt.subplots()
+    data = {
+        'beta': betas[:,np.newaxis,np.newaxis].repeat(len(Ds),1).repeat(2,2).flatten(),
+        'acceptance_rate': np.concatenate([acc_grw[:,:,np.newaxis], acc_pcn[:,:,np.newaxis]], axis=2).flatten()*100,
+        'Dimension': Ds[np.newaxis,:,np.newaxis].repeat(len(betas),0).repeat(2,2).flatten(),
+        'Algorithm': np.array(['GRW-MH', 'PCN'])[np.newaxis,np.newaxis,:].repeat(len(betas),0).repeat(len(Ds),1).flatten()
+    }
+    ax = sns.lineplot(data, x='beta', y='acceptance_rate', hue='Dimension', style='Algorithm')
+    ax.set(xlabel='$\\beta$', ylabel='Acceptance rate (%)')
+    fig = ax.get_figure()
     fig.savefig(fig_folder / 'acceptance_rate.pdf')
 
 def mesh_refinement(fig_folder):
     D = 3
     l = 0.3 
-    subsample_factor = 2
+    subsample_factor = 1
     
     x, y, u, v, K, G, idx, N, M = generate_data(D, l, subsample_factor)
     
-    mesh_refinements = [1, 2, 4, 8, 16]
-    betas = np.logspace(-5, 0, 30, base=10)
+    mesh_refinements = np.array([1, 2, 4, 8, 16])
+    betas = np.logspace(-3, 0, 30, base=10)
     
-    acc_grw = np.zeros((len(mesh_refinements), len(betas)))
-    acc_pcn = np.zeros((len(mesh_refinements), len(betas)))
+    acc_grw = np.zeros((len(betas), len(mesh_refinements)))
+    acc_pcn = np.zeros((len(betas), len(mesh_refinements)))
     
-    T = 10000
+    T = 10_000
     for i, mesh_refinement in enumerate(tqdm(mesh_refinements, desc='Mesh Refinement Sweep')):
         Dx = (D - 1) * mesh_refinement + 1
         Dy = Dx
@@ -139,37 +158,51 @@ def mesh_refinement(fig_folder):
         G_r = get_G(N_r, idx_r)
         
         for j, beta in enumerate(tqdm(betas, desc='Beta Sweep', leave=False)):
-            _, acc_grw[i, j] = grw(lambda u: log_continuous_target(u, v, K_inverse_r, G_r), u0, K_r, T, beta)
-            _, acc_pcn[i, j] = pcn(lambda u: log_continuous_likelihood(u, v, G_r), u0, K_r, T, beta)
+            _, acc_grw[j, i] = grw(lambda u: log_continuous_target(u, v, K_inverse_r, G_r), u0, K_r, T, beta)
+            _, acc_pcn[j, i] = pcn(lambda u: log_continuous_likelihood(u, v, G_r), u0, K_r, T, beta)
             
-    fig, ax1 = plt.subplots()
-    fig, ax2 = plt.subplots()
+    fig1, ax1 = plt.subplots()
+    fig2, ax2 = plt.subplots()
 
     for i, mesh_refinement in enumerate(mesh_refinements):
-        ax1.semilogx(betas, acc_grw[i,:]*100, label=f'Mesh refinement: {mesh_refinement}')
-        ax2.semilogx(betas, acc_pcn[i,:]*100, label=f'Mesh refinement: {mesh_refinement}')
-    ax2.set_xlabel('beta')
+        ax1.semilogx(betas, acc_grw[:,i]*100, label=f'Mesh refinement: {mesh_refinement}')
+        ax2.semilogx(betas, acc_pcn[:,i]*100, label=f'Mesh refinement: {mesh_refinement}')
+    ax1.set_xlabel('$\\beta$')
+    ax2.set_xlabel('$\\beta$')
     ax1.set_ylabel('Acceptance rate (%)')
     ax2.set_ylabel('Acceptance rate (%)')
     ax1.legend()
     ax2.legend()
-    ax1.set_title('GRW')
-    ax2.set_title('PCN')
-    fig.tight_layout()
+    fig1.tight_layout()
+    fig2.tight_layout()
+    fig1.savefig(fig_folder / 'acceptance_rate_mesh_refinement_grw.pdf')
+    fig2.savefig(fig_folder / 'acceptance_rate_mesh_refinement_pcn.pdf')
+    
+    fig, ax = plt.subplots()
+    data = {
+        'beta': betas[:,np.newaxis,np.newaxis].repeat(len(mesh_refinements),1).repeat(2,2).flatten(),
+        'acceptance_rate': np.concatenate([acc_grw[:,:,np.newaxis], acc_pcn[:,:,np.newaxis]], axis=2).flatten()*100,
+        'Mesh Refinement': mesh_refinements[np.newaxis,:,np.newaxis].repeat(len(betas),0).repeat(2,2).flatten(),
+        'Algorithm': np.array(['GRW-MH', 'PCN'])[np.newaxis,np.newaxis,:].repeat(len(betas),0).repeat(len(mesh_refinements),1).flatten()
+    }
+    ax = sns.lineplot(data, x='beta', y='acceptance_rate', hue='Mesh Refinement', style='Algorithm')
+    ax.set(xlabel='$\\beta$', ylabel='Acceptance rate (%)')
+    ax.set(xscale='log')
+    fig = ax.get_figure()
     fig.savefig(fig_folder / 'acceptance_rate_mesh_refinement.pdf')
 
 def main(fig_folder):
     
     ### Algorithm Analysis
     # Prior sample plots
-    prior_sample_plots(fig_folder)
+    # prior_sample_plots(fig_folder)
     
     # Beta/D sweep
-    beta_effect(fig_folder)
+    # beta_effect(fig_folder)
     
     # Mesh refinement
-    mesh_refinement(fig_folder)
-    
+    # mesh_refinement(fig_folder)
+
     ### Simulated inference
     np.random.seed(2)
     
@@ -194,20 +227,19 @@ def main(fig_folder):
 
     # Mean field inference
     T = 1_000_000
-    beta = 0.2
     
     start = time.time()
-    u_samples_grw, acc_grw = grw(lambda u: log_continuous_target(u, v, K_inverse, G), u0, K, T, beta)
+    u_samples_grw, acc_grw = grw(lambda u: log_continuous_target(u, v, K_inverse, G), u0, K, T, 0.2)
     total_time_grw = time.time() - start
     print(f'GRW - Acceptance rate: {acc_grw*100}%, Time per iteration: {total_time_grw/T}s')
     process_mc_results(x, y, u, u_samples_grw, fig_folder, 'grw')
     
     start = time.time()
-    u_samples_pcn, acc_pcn = pcn(lambda u: log_continuous_likelihood(u, v, G), u0, K, T, beta)
+    u_samples_pcn, acc_pcn = pcn(lambda u: log_continuous_likelihood(u, v, G), u0, K, T, 0.4)
     total_time_pcn = time.time() - start
     print(f'PCN - Acceptance rate: {acc_pcn*100}%, Time per iteration: {total_time_pcn/T}s')
     process_mc_results(x, y, u, u_samples_pcn, fig_folder, 'pcn')
-
+    
     # Probit observation
     t = probit(v)       # Probit transform of data
     t_true = probit(u)  # Probit transform of latent field
@@ -218,7 +250,7 @@ def main(fig_folder):
     fig.savefig(fig_folder / 'probit_true.pdf')
 
     # Probit MCMC
-    T = 10_000
+    T = 1_000_000
     beta = 0.2
     
     u_samples_probit, _ = pcn(lambda u: log_probit_likelihood(u, t, G), u0, K, T, beta)
@@ -259,18 +291,25 @@ def main(fig_folder):
         error[i] = np.mean((assignments_t_true - t_true)**2)
         error_smooth[i] = np.mean((posterior_t_true - t_true)**2)
         error_data_only[i] = np.mean((posterior_t[idx] - t)**2)
-        log_marginal_likelihoods[i] = log_marginal_likelihood(lambda u: log_probit_likelihood(u, t, G), Kc, N, 100000)
+        log_marginal_likelihoods[i] = log_marginal_likelihood(lambda u: log_probit_likelihood(u, t, G), Kc, N, int(np.ceil(10000/l)))
 
         
     fig, ax = plt.subplots()
-    ax.plot(ls, error)
-    ax.plot(ls, error_smooth)
-    ax.plot(ls, error_data_only)
+    ax.plot(ls, error, label='Mean Error')
+    ax.plot(ls, error_smooth, label='Mean Smooth Error')
+    ax.plot(ls, error_data_only, label='Mean Smooth Error to Observations')
+    ax.set_xlabel('$\\ell$')
+    ax.set_ylabel('Error')
+    ax.legend()
     fig.tight_layout()
+    fig.savefig(fig_folder / 'l_sweep_error.pdf')
     
     fig, ax = plt.subplots()
     ax.plot(ls, log_marginal_likelihoods)
+    ax.set_xlabel('$\\ell$')
+    ax.set_ylabel('Log Marginal Likelihood')
     fig.tight_layout()
+    fig.savefig(fig_folder / 'l_sweep_log_marginal_likelihood.pdf')
 
 
 if __name__ == '__main__':

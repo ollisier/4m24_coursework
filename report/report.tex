@@ -4,7 +4,7 @@
 \usepackage{amssymb}
 \usepackage{subcaption}
 \usepackage{graphicx}
-\usepackage[margin=0.5in]{geometry}
+\usepackage[margin=1in]{geometry}
 
 \graphicspath{{../figures/}}
 \renewcommand{\thesubsection}{\alph{subsection}}
@@ -13,17 +13,19 @@
 \author{Candidate Number: 5488A}
 \date{December 2024}
 
+\usepackage{hyperref}
+
 \begin{document}
 
 \maketitle
 
 \section{Simulation}
 \subsection{Gaussian Process Prior}
-Our prior is a Gaussian Process has zero mean and a squared exponential covariance kernel, $k(\boldsymbol{x}, \boldsymbol{x}')$, with length scale $\ell$. The coordinates, $\{\boldsymbol{x_n}\}_{n=1}^{N}$, of our samples at placed on a regular $D \times D$ grid in $[0, 1]^2$. 
+Our prior is a Gaussian Process with zero mean and a squared exponential covariance kernel, $k(\boldsymbol{x}, \boldsymbol{x}')$, having length scale $\ell$. The coordinates, $\{\boldsymbol{x}_n\}_{n=1}^{N}$, of our samples are placed on a regular $D \times D$ grid in $[0, 1]^2$. It is clear that $N = D^2$.
 \begin{equation}
     k(\boldsymbol{x}, \boldsymbol{x}') = \exp\left(-\frac{\|\boldsymbol{x} - \boldsymbol{x}'\|^2}{2\ell^2}\right)
 \end{equation}
-Our samples, $\boldsymbol{u}$, collected into an $N \times 1$ vector and is distributed $\boldsymbol{u} \sim \mathcal{N}(\boldsymbol{0}, C)$, where $C$ is the $N \times N$ covariance matrix with entries $C_{ij} = k(\boldsymbol{x_i}, \boldsymbol{x_j})$.
+Our samples, $\boldsymbol{u}$, collected into an $N \times 1$ vector are therefore distributed $\boldsymbol{u} \sim \mathcal{N}(\boldsymbol{0}, C)$, where $C$ is the $N \times N$ covariance matrix with entries $C_{ij} = k(\boldsymbol{x}_i, \boldsymbol{x}_j)$.
 
 Samples from this prior are shown in Figure \ref{fig:gp_prior} for 3 values of $\ell$. Larger values result in a smoother surface with more correlation between nearby points.
 
@@ -45,7 +47,7 @@ Samples from this prior are shown in Figure \ref{fig:gp_prior} for 3 values of $
     \label{fig:gp_prior}
 \end{figure}
 
-We subsample the grid with $M$ uniform random draws and apply independent Gaussian measurement noise, $\boldsymbol{\epsilon}$, to the observations. This subsampling can be captured by the matrix $M \times N$ matrix $G$ with entries $G_{ij} = 1$ if the $i$th observation is at the $j$th grid point and $0$ otherwise. The observations, $\boldsymbol{v}$. We also define the subsampling factor $f := N/M$. 
+We subsample the grid with $M$ uniform random draws and apply independent Gaussian measurement noise, $\boldsymbol{\epsilon}$, to the observations. This subsampling can be captured by the matrix $M \times N$ matrix $G$ with entries $G_{ij} = 1$ if the $i$th observation is at the $j$th grid point and $0$ otherwise. We will denote the $M\times1$ vector of the subsampled latent field as $\tilde{\boldsymbol{u}} = G\boldsymbol{u}$. We define the subsampling factor $f := N/M$. The observations, $\boldsymbol{v}$, are produced according to the following model.
 \begin{equation}
     \boldsymbol{v} = G\boldsymbol{u} + \boldsymbol{\epsilon} \quad \boldsymbol{\epsilon} \sim \mathcal{N}(\boldsymbol{0}, I)
 \end{equation}
@@ -59,25 +61,24 @@ One sample is produced from this model with $D=16$, $f=4$ and $\ell=0.3$ to be u
 \end{figure}
 
 \subsection{Likelihoods and MCMC}
-We now proceed to infer the latent surface, $\boldsymbol{u}$, from the noisy observations, $\boldsymbol{v}$, using MCMC. To compute our posterior we need to evaluate the likelihood, $p(\boldsymbol{v} | \boldsymbol{u})$, and the prior, $p(\boldsymbol{u})$. The form of the prior was given previously but is repeated below and its logarithm can be computed with simple algegbraic manimpulation.
+We now proceed to infer the latent surface, $\boldsymbol{u}$, from the noisy observations, $\boldsymbol{v}$, using MCMC. To compute our posterior we need to evaluate the likelihood, $p(\boldsymbol{v} | \boldsymbol{u})$, and the prior, $p(\boldsymbol{u})$. The form of the prior was given previously but is repeated below and its logarithm can be computed with simple algebraic manipulation.
 \begin{equation}
     \begin{aligned}
-        \boldsymbol{u} &\sim \mathcal{N}(\boldsymbol{0}, K) \\
-        \ln p(\boldsymbol{u}) &= - \frac{N}{2}\ln(2\pi) - \frac{1}{2}\ln(|K|) - \frac{1}{2} \boldsymbol{v}^T K^{-1} \boldsymbol{v} \\
-          &= - \frac{1}{2} \boldsymbol{v}^T K^{-1} \boldsymbol{v} + \text{const} \\
+        \boldsymbol{u} &\sim \mathcal{N}(\boldsymbol{0}, C) \\
+        \ln p(\boldsymbol{u}) &= - \frac{N}{2}\ln(2\pi) - \frac{1}{2}\ln(|K|) - \frac{1}{2} \boldsymbol{u}^T C^{-1} \boldsymbol{u} \\
+          &= - \frac{1}{2} \boldsymbol{u}^T C^{-1} \boldsymbol{u} + \text{const} \\
     \end{aligned}
 \end{equation}
-
 Likewise the likelihood is given below.
 \begin{equation}
     \begin{aligned}
         \boldsymbol{v} | \boldsymbol{u} &\sim \mathcal{N}(G\boldsymbol{u}, I) \\
-        \ln p(\boldsymbol{v} | \boldsymbol{u}) &= - \frac{M}{2}\ln(2\pi) - \frac{1}{2}\ln(|I|) - \frac{1}{2}(\boldsymbol{v} - G\boldsymbol{u})^T (\boldsymbol{v} - G\boldsymbol{u}) \\
-          &= - \frac{1}{2}(\boldsymbol{v} - G\boldsymbol{u})^T (\boldsymbol{v} - G\boldsymbol{u}) + \text{const} \\
+        \ln p(\boldsymbol{v} | \boldsymbol{u}) &= - \frac{M}{2}\ln(2\pi) - \frac{1}{2}\ln(|I|) - \frac{1}{2}(\boldsymbol{v} - \tilde{\boldsymbol{u}})^T (\boldsymbol{v} - \tilde{\boldsymbol{u}}) \\
+          &= - \frac{1}{2}(\boldsymbol{v} - \tilde{\boldsymbol{u}})^T (\boldsymbol{v} - \tilde{\boldsymbol{u}}) + \text{const} \\
     \end{aligned}
 \end{equation}
 
-Computation of the posterior is straightforward using Baye's rule. Note that we only need to compute the log-prior and log-likelihood up to a constant which greatly saves on computation.
+Computation of the posterior is straightforward using Bayes rule. Note that we only need to compute the log-prior and log-likelihood up to a constant which greatly saves on computation.
 \begin{equation}
     p(\boldsymbol{u} | \boldsymbol{v}) \propto p(\boldsymbol{v} | \boldsymbol{u}) p(\boldsymbol{u}) \therefore \ln p(\boldsymbol{u} | \boldsymbol{v}) = \ln p(\boldsymbol{v} | \boldsymbol{u}) + \ln p(\boldsymbol{u}) + \text{const}
 \end{equation}
@@ -85,4 +86,273 @@ Computation of the posterior is straightforward using Baye's rule. Note that we 
 We now consider two MCMC algorithms for generating samples from the posterior.
 
 \subsubsection{Gaussian random walk Metropolis-Hastings}
+The Gaussian random walk Metropolis-Hastings (GRW-MH) algorithm samples from a Gaussian random walk proposal distribution, $\boldsymbol{X}' | \boldsymbol{X} \sim \mathcal{N}(\boldsymbol{X}, \beta^2 C)$. The acceptance probability for our target distribution, $\pi(\boldsymbol{u}) = p_{\boldsymbol{u} | \boldsymbol{v}}(\boldsymbol{u} | \boldsymbol{v})$, simplifies nicely as our proposal distribution is symmetric, $p(\boldsymbol{x}' | \boldsymbol{x}) = p(\boldsymbol{x} | \boldsymbol{x}')$. The reason we only need to compute our log-posterior up to a constant is now clear as we are calculating a difference between two log-posteriors.
+\begin{equation}
+    \begin{aligned}
+        \alpha(\boldsymbol{x}, \boldsymbol{x}') &= \min\left(\frac{\pi(\boldsymbol{x}')p_{\boldsymbol{X}'|\boldsymbol{X}}(\boldsymbol{x}|\boldsymbol{x}')}{\pi(\boldsymbol{x})p_{\boldsymbol{X}'|\boldsymbol{X}}(\boldsymbol{x}'|\boldsymbol{x})}, 1\right) \\
+          &= \min\left(\frac{p_{\boldsymbol{u} | \boldsymbol{v}}(\boldsymbol{x}' | \boldsymbol{v})}{p_{\boldsymbol{u} | \boldsymbol{v}}(\boldsymbol{x} | \boldsymbol{v})}, 1\right) \\
+        \ln (\alpha(\boldsymbol{x}, \boldsymbol{x}')) &= \min(\ln p_{\boldsymbol{u} | \boldsymbol{v}}(\boldsymbol{x}' | \boldsymbol{v}) - \ln p_{\boldsymbol{u} | \boldsymbol{v}}(\boldsymbol{x} | \boldsymbol{v}), 0)
+    \end{aligned}
+\end{equation}
+
+\subsubsection{Preconditioned Crank-Nicolson}
+The Preconditioned Crank-Nicolson (PCN) algorithm produces a Markov chain with invariant measure $\pi$ where $\frac{d\pi}{d\mu^0}(\boldsymbol{x}) \propto \exp(-\Phi(\boldsymbol{x}))$, where $\mu^0 = \mathcal{N}(0, C_0)$ is a Gaussian measure. In our case we have $d\pi(\boldsymbol{x}) = p_{\boldsymbol{u} | \boldsymbol{v}}(\boldsymbol{x} | \boldsymbol{v}) \propto p_{\boldsymbol{v} | \boldsymbol{u}}(\boldsymbol{v} | \boldsymbol{x}) p_{\boldsymbol{u}}(\boldsymbol{x})$, therefore $\Phi(\boldsymbol{x}) = -\ln p_{\boldsymbol{v} | \boldsymbol{u}}(\boldsymbol{v} | \boldsymbol{x})$ and $d\mu^0 = p_{\boldsymbol{u}}$ ($C_0 = C$). The proposal distribution is $\boldsymbol{X}' | \boldsymbol{X} \sim \mathcal{N}(\sqrt{1-\beta^2}\boldsymbol{X}, \beta^2 C)$ and the acceptance probability is
+\begin{equation}
+    \begin{aligned}
+        \alpha(\boldsymbol{x}, \boldsymbol{x}') &= \min\left(\exp(\Phi(\boldsymbol{x}) - \Phi(\boldsymbol{x}')), 1\right) \\
+          &= \min\left(\exp(\ln p_{\boldsymbol{v} | \boldsymbol{u}}(\boldsymbol{v} | \boldsymbol{x}') - \ln p_{\boldsymbol{v} | \boldsymbol{u}}(\boldsymbol{v} | \boldsymbol{x})), 1\right) \\
+        \ln (\alpha(\boldsymbol{x}, \boldsymbol{x}')) &= \min(\ln p_{\boldsymbol{v} | \boldsymbol{u}}(\boldsymbol{x}' | \boldsymbol{v}) - \ln p_{\boldsymbol{v} | \boldsymbol{u}}(\boldsymbol{x} | \boldsymbol{v}), 0)
+    \end{aligned}
+\end{equation}
+Again we only need to compute the log likelihoods up to a constant as we are calculating a difference.
+
+\subsubsection{Comparison}
+\begin{figure}
+    \centering
+    \begin{subfigure}{0.45\textwidth}
+        \includegraphics[width=\textwidth]{simulation/u_mean_grw}
+        \subcaption{GRW-MH}
+    \end{subfigure}
+    \begin{subfigure}{0.45\textwidth}
+        \includegraphics[width=\textwidth]{simulation/u_mean_pcn}
+        \subcaption{PCN}
+    \end{subfigure}
+    \caption{Mean of the posterior latent surface, $\mathbb{E}(\boldsymbol{u} | \boldsymbol{v})$, for GRW-MH and PCN}
+    \label{fig:u_mean}
+\end{figure}
+
+\begin{figure}
+    \centering
+    \begin{subfigure}{0.45\textwidth}
+        \includegraphics[width=\textwidth]{simulation/u_error_grw}
+        \subcaption{GRW-MH}
+    \end{subfigure}
+    \begin{subfigure}{0.45\textwidth}
+        \includegraphics[width=\textwidth]{simulation/u_error_pcn}
+        \subcaption{PCN}
+    \end{subfigure}
+    \caption{Error of the mean posterior latent surface, $\mathbb{E}(\boldsymbol{u} | \boldsymbol{v})$, to the true $\boldsymbol{u}$ for GRW-MH and PCN}
+    \label{fig:u_error}
+\end{figure}
+
+Figure \ref{fig:u_mean} shows the mean of the posterior latent surface, $\boldsymbol{u} | \boldsymbol{v}$, for both the GRW-MH and PCN algorithms. Both algorithms converge to the same posterior as expected. The error to the true latent surface, shown in Figure \ref{fig:u_error}, is not zero but this is expected as the noise in the observations will prevent perfect recovery of the latent surface.
+
+\begin{figure}
+    \centering
+    \begin{subfigure}{0.45\textwidth}
+        \includegraphics[width=\textwidth]{simulation/acceptance_rate}
+        \subcaption{Acceptance rate}
+        \label{fig:acceptance_rate}
+    \end{subfigure}
+    \begin{subfigure}{0.45\textwidth}
+        \includegraphics[width=\textwidth]{simulation/autocorrelation}
+        \subcaption{Total autocorrelation}
+        \label{fig:autocorrelation}
+    \end{subfigure}
+    \caption{Effect of $\beta$ and $D$ on the acceptance rate and total autocorrelation for GRW-MH and PCN}
+\end{figure}
+
+The acceptance rate of the GRW-MH and PCN algorithms is shown in Figure \ref{fig:acceptance_rate} for varying $\beta$ and dimension, $D$. For both algorithms the acceptance rate approaches 100\% as $\beta \to 0$ and decreases with increasing $\beta$. This is expected as for $\beta = 0$ we have $\boldsymbol{X}' = \boldsymbol{X}$, the proposal is the same as the current state and therefore the acceptance  probability is 1 for both algorithms. However, in this case the proposal is not exploring the space and the algorithm will not converge to the posterior. 
+
+If we wish to choose an optimal $\beta$ we could choose the value that minimises the variance of Monte Carlo expectations. If we wish to compute $\mathbb{E}[f(\boldsymbol{X})]$, for some random variable $\boldsymbol{X} \sim \pi$, we can compute a Monte Carlo estimate, $\bar{f} = \frac{1}{T} \sum_{t=1}^{T} f(\boldsymbol{X}^{(t)})$, using samples, $X^{(t)}$, from a Markov chain with invariant measure $\pi$. The variance of this estimate in terms of the autocorrelation coefficient of the chain, $\rho_{f(X)f(X)}(\tau)$, is:
+\begin{equation}
+    \text{Var}(\bar{f}) = \text{Var}(\frac{1}{T} \sum_{t=1}^{T} f(\boldsymbol{X}^{(t)})) = \frac{1}{T} \left(\text{Var}(f(\boldsymbol{X})) + 2 \sum_{\tau=1}^{T-1} (1-\frac{\tau}{T}) \rho_{f(X)f(X)}(\tau)\right)
+\end{equation}
+Therefore we should choose $\beta$ that minimises $\sum_{\tau=1}^{T-1} (1-\frac{\tau}{T}) \rho_{f(X)f(X)}(\tau)$, which we will name the total autocorrelation.
+
+Figure \ref{fig:autocorrelation} shows how the total auto correlation for $\mathbb{E}_{\boldsymbol{u}|\boldsymbol{v}}[\boldsymbol{u}]$ varies with $\beta$ and $D$. In general for fixed $\beta$ and $D$ GRW-MH has higher total autocorrelation than PCN, this indicates the PCN explores the posterior more efficiently leading to a producing a Monte Carlo estimate with lower variance. Also note that the optimal $\beta$ decreases with increasing dimension for both algorithms. However, based on a rough observation from the Figure \ref{fig:acceptance_rate} we can see that the optimal (minimum total autocorrelation) $\beta$ maintains an acceptance rate of around 20\% for both cases. This is a good rule of thumb, with theoretical backing \cite{sherlock}, for choosing $\beta$ in practice.
+
+Finally, we observe that the time per iteration for PCN is 10\% lower than GRW-MH. This is because the PCN algorithm only requires evaluation of the likelihood while the GRW-MH algorithm requires evaluation of the likelihood and prior. Therefore the PCN algorithm is superior in convergence and computational efficiency.
+
+\subsubsection{Mesh Refinement}
+\begin{figure}
+    \centering
+    \includegraphics[width=0.5\textwidth]{simulation/acceptance_rate_mesh_refinement}
+    \caption{Effect of mesh refinement on acceptance rate for GRW-MH and PCN.}
+    \label{fig:mesh_refinement}
+\end{figure}
+
+We now analyse the robustness of the algorithms to mesh refinement. While keeping the same number of observations we increase the number of mesh points, in the limit we will be drawing samples in the infinite dimensional Hilbert space. Figure \ref{fig:mesh_refinement} shows that the acceptance rate of the GRW-MH algorithm approaches 0 with increased mesh refinement, conversely the acceptance rate of the PCN algorithm is unaffected. This is because the acceptance probability of the GRW-MH algorithm is not well defined in an infinite dimensional space.
+
+\subsection{Probit Observations}
+The observation model is now augmented with a probit function that assigns 1 to positive $v_n$ and 0 otherwise. The likelihood is therefore
+\begin{equation}
+    p(\boldsymbol{t} | \boldsymbol{u}) = \prod_{m=1}^{M} p(t_m | \tilde{u}_m) = \prod_{m=1}^{M} \Phi(\tilde{u}_m)^{t_m} \Phi(-\tilde{u}_m)^{1-t_m}
+\end{equation}
+The predictive distribution for the true class assignments, $\boldsymbol{t}_{true} = \text{probit}(\boldsymbol{u})$, can be computed as follows.
+\begin{equation}
+    p(t_{n|true}^*=1|\boldsymbol{t}) = \int p(t_{n|true}^*=1 | \boldsymbol{u}) p(\boldsymbol{u} | \boldsymbol{t}) d\boldsymbol{u} = \frac{1}{T} \sum_{t=1}^{T} p(t_{n|true}^*=1 | \boldsymbol{u}^{(t)}) = \frac{1}{T} \sum_{t=1}^{T} \text{probit}(u^{(t)}_n)
+\end{equation}
+Similarly, the predictive distribution for the observed class assignments is
+\begin{equation}
+    p(t_{n}^*=1|\boldsymbol{t}) = \frac{1}{T} \sum_{t=1}^{T} p(t_{n}^*=1 | \boldsymbol{u}^{(t)}) = \frac{1}{T} \sum_{t=1}^{T} \Phi(u^{(t)}_n)
+\end{equation}
+The true class assignments along with the two predictive distributions are shown in Figure \ref{fig:probit}. Notice that the predictive distribution for the observed class assignments is less confident than that of the true class assignments due to the noise in the observations.
+
+\begin{figure}
+    \centering
+    \begin{subfigure}{0.3\textwidth}
+        \includegraphics[width=\textwidth]{simulation/probit_true}
+        \subcaption{True class \newline assignments}
+    \end{subfigure}
+    \begin{subfigure}{0.3\textwidth}
+        \includegraphics[width=\textwidth]{simulation/probit_true_posterior}
+        \subcaption{Predictive distribution for true class assignments}
+    \end{subfigure}
+    \begin{subfigure}{0.3\textwidth}
+        \includegraphics[width=\textwidth]{simulation/probit_predictive_posterior}
+        \subcaption{Predictive distribution for observed class assignments}
+    \end{subfigure}
+    \begin{subfigure}{0.3\textwidth}
+        \includegraphics[width=\textwidth]{simulation/probit_observations}
+        \subcaption{Observed class assignments}
+    \end{subfigure}
+    \begin{subfigure}{0.3\textwidth}
+        \includegraphics[width=\textwidth]{simulation/probit_true_assignments}
+        \subcaption{Thresholded true class assignments}
+    \end{subfigure}
+    \begin{subfigure}{0.3\textwidth}
+        \includegraphics[width=\textwidth]{simulation/probit_predictive_assignments}
+        \subcaption{Thresholded observed class assignments}
+    \end{subfigure}
+    \caption{Probit Observations}
+    \label{fig:probit}
+\end{figure}
+
+\subsection{Hyperparameter Estimation}
+\label{sec:hyperparameter_estimation}
+Hard assignments for the true probit classifications are produced by thresholding the predictive probabilities at 0.5 (or rounding). These are also visualised in Figure \ref{fig:probit}. Notice that the thresholded true class assignments are the same as the thresholded observed class assignments as the observation noise is symmetric. We can compute the mean prediction error, $e(\ell)$, by comparing our predictions to the true latent surface as follows.
+\begin{equation}
+    e(\ell) = \frac{1}{N}\sum_{n=1}^N (\text{round}(p(t_{n|true}^*=1|\boldsymbol{t}, \ell)) - t_{n|true})^2
+\end{equation}
+This error is not smooth as when the predictive probability crosses the threshold the class assignment changes. We can compute a smooth error, $e_{smooth}(\ell)$, as the mean squared error over the predictive probabilities.
+\begin{equation}
+    e_{smooth}(\ell) = \frac{1}{N}\sum_{n=1}^N (p(t_{n|true}^*=1|\boldsymbol{t}, \ell) - t_{n|true})^2
+\end{equation}
+The optimal length scale, $\ell^{\star}$, is chosen to minimise the error. The error for varying length scale, $\ell$, is shown in Figure \ref{fig:prediction_error}. Both formulations of the error show a minimum at $\ell^{\star} \approx 0.3$ which is the true length scale used to generate the data. However in a real world scenario we can only view the true latent surface through the subsampled and noisy observation model. Also shown in Figure \ref{fig:prediction_error} is the mean prediction error to the our observations. This has a minimum at $\ell^{\star} \approx 0.05$, well below the true length scale, as we are overfitting to the noise in the observations.
+\begin{figure}
+    \centering
+    \begin{subfigure}{0.45\textwidth}        
+        \includegraphics[width=\textwidth]{simulation/l_sweep_error}
+        \subcaption{Prediction error with varying $\ell$.}
+        \label{fig:prediction_error}
+    \end{subfigure}
+    \begin{subfigure}{0.45\textwidth}        
+        \includegraphics[width=\textwidth]{simulation/l_sweep_log_marginal_likelihood}
+        \caption{Log marginal likelihood with varying $\ell$.}
+        \label{fig:marginal_likelihood}
+    \end{subfigure}
+    \caption{Hyperparameter estimation}
+\end{figure}
+
+An alternative approach to hyperparameter estimation is to maximise the marginal likelihood, $p(\boldsymbol{v} | \ell)$. We can compute a simple Monte Carlo estimate of the log marginal likelihood as follows.
+\begin{equation}
+    p(\boldsymbol{t}| \ell) = \int p(\boldsymbol{t} | \boldsymbol{u}, \ell) p(\boldsymbol{u} | \ell) d\boldsymbol{u} = \frac{1}{T} \sum_{t=1}^{T} p(\boldsymbol{t} | \boldsymbol{u}^{(t)}) \quad \boldsymbol{u}^{(t)} \sim p(\cdot | \ell)
+\end{equation}
+This estimate has high variance for small $\ell$ which could be reduced using various variance reduction techniques, however, we will not consider these here and will instead use a large number of samples. Notice that the computation of the marginal likelihood only requires knowledge of the observations and not the true latent variable. The log marginal likelihood for varying $\ell$ is shown in Figure \ref{fig:marginal_likelihood}. The maximum of the log marginal likelihood is at $\ell^{\star} \approx 0.3$ which is the true length scale used to generate the data.
+
+\section{Spatial Data}
+\setcounter{subsection}{4}
+We now turn to the real world problem of predicting bike thefts in Lewisham borough over 2015. The area of the borough is split up into $N$ 400$\text{m}^2$ cells identified by coordinates $\{(x_n, y_n)\}_{n=1}^{N}$. The provided coordinates were normalised between 0 and 1, therefore by measuring the width of Lewisham borough as 8km we rescaled the coordinates to indicate the true relative distance between cells. The total bike thefts reported during the year in the nth cell is $c_n$, we collect these into an $N\times1$ vector, $\boldsymbol{c}$. The data is subsampled to investigate if we can still make predictions with partial observations. This is done as before with $M = \frac{N}{f}$ random draws to form a matrix $G$ that performs the transformation. We will use a subsampling factor of $f=4$ for the analysis in this section. The full and subsampled data are visualised in Figure \ref{fig:bike_theft_data}.
+
+\begin{figure}
+    \centering
+    \begin{subfigure}{0.45\textwidth}
+        \includegraphics[width=\textwidth]{spatial/bike_theft_data}
+        \subcaption{Bike thefts in Lewisham}
+    \end{subfigure}
+    \begin{subfigure}{0.45\textwidth}
+        \includegraphics[width=\textwidth]{spatial/bike_theft_data_subsampled}
+        \subcaption{Subsampled bike theft data}
+    \end{subfigure}
+    \caption{}
+    \label{fig:bike_theft_data}
+\end{figure}
+
+The data is modelled using a latent surface, $\boldsymbol{u}$, with a squared exponential Gaussian Process prior as before. This field is mapped to $\mathbb{R}^+$ using an exponential function to model the rate of bike thefts, $\boldsymbol{\theta} = \exp{\boldsymbol{u}}$, where the exponential function is applied elementwise. The observations, $\boldsymbol{c_n}$, are modelled as Poisson random variables with rate $\theta_n$. As before we will denote the subsampled $M\times1$ vectors with a tilde, i.e. $\tilde{\boldsymbol{u}} = G\boldsymbol{u}$, $\tilde{\boldsymbol{\theta}} = G\boldsymbol{\theta}$ and $\tilde{\boldsymbol{c}} = G\boldsymbol{c}$.
+\subsection{Poisson observations}
+To produce samples of the posterior with the PCN sampler we need to compute the likelihood of the observations, $p(\tilde{\boldsymbol{c}} | \boldsymbol{u})$.
+\begin{equation}
+    \begin{aligned}
+        c_m | \boldsymbol{\theta} &\sim \text{Poisson}(\tilde{\theta}_m) \\
+        \ln p(\tilde{\boldsymbol{c}} | \boldsymbol{u}) &= \ln p(\tilde{\boldsymbol{c}} | \boldsymbol{u}, \boldsymbol{\theta}) = \ln p(\tilde{\boldsymbol{c}} | \boldsymbol{\theta} = \exp(\boldsymbol{u})) \\
+          &= \sum_{m=1}^{M} \left(-\exp(\tilde{u}_m) + \tilde{c}_m \tilde{u}_m - \ln(\tilde{c}_m!)\right) \\
+          &= - \boldsymbol{1}^T \exp(\tilde{\boldsymbol{u}}) + \tilde{\boldsymbol{c}}^T \tilde{\boldsymbol{u}} + f(\tilde{\boldsymbol{c}})
+    \end{aligned}
+\end{equation}
+Where we define $\exp$ elementwise and $f(\boldsymbol{c})$ is a constant that does not depend on $\boldsymbol{u}$ and is therefore cancelled out when computing the PCN acceptance probability.
+
+\subsection{Bike theft predictions}
+\subsubsection{Posterior field}
+We can compute the posterior expected number of bike thefts, $\mathbb{E}_{c_n^*|\tilde{\boldsymbol{c}}}(c_n^*)$, at a location $(x_n, y_n)$ as follows.
+\begin{equation}
+    \begin{aligned}
+        \mathbb{E}_{c_n^*|\tilde{\boldsymbol{c}}}(c_n^*) &= \mathbb{E}_{\boldsymbol{\theta}|\tilde{\boldsymbol{c}}}(\mathbb{E}_{c_n^*|\boldsymbol{\theta}, \tilde{\boldsymbol{c}}}(c_n^*)) \\
+          &= \mathbb{E}_{\boldsymbol{\theta}|\tilde{\boldsymbol{c}}}(\mathbb{E}_{c_n^*|\boldsymbol{\theta}}(c_n^*)) \\
+          &= \mathbb{E}_{\boldsymbol{\theta}|\tilde{\boldsymbol{c}}}(\theta_n) \\
+          &\approx \frac{1}{T} \sum_{t=1}^{T} \theta_n^{(t)} \\
+          &= \frac{1}{T} \sum_{t=1}^{T} \exp(u_n^{(t)})
+    \end{aligned}
+\end{equation}
+Here we use the law of conditional expectation to condition the expectation on the rate field, $\boldsymbol{\theta}$, and notice that the expectation of a Poisson random variable is equal to its rate. We can then compute a Monte Carlo estimate for the posterior mean theft field using the samples from the PCN sampler. We have computed the this field and its error to the observations for various $\ell$ in Figures \ref{fig:posterior_mean_field} and \ref{fig:error_field} respectively. For small values of $\ell$ the model only fits at the coordinates of the subsampled data while returning to the prior theft rate of 1 elsewhere. This is not useful for making predictions outside of the subsampled data. For large values of $\ell$ the model only captures the large scale trend of the data, in this case only capturing the North-South variation in the theft rate. A more central value of $\ell$ manages to capture the local variations in theft rate while still being able to make predictions outside of the observations. 
+
+\begin{figure}
+    \centering
+    \begin{subfigure}{0.3\textwidth}
+        \includegraphics[width=\textwidth]{spatial/posterior_mean_field_l=100}
+        \subcaption{$\ell = 0.1\text{km}$}
+    \end{subfigure}    
+    \begin{subfigure}{0.3\textwidth}
+        \includegraphics[width=\textwidth]{spatial/posterior_mean_field_l=1500}
+        \subcaption{$\ell = 1.5\text{km}$}
+    \end{subfigure}    
+    \begin{subfigure}{0.3\textwidth}
+        \includegraphics[width=\textwidth]{spatial/posterior_mean_field_l=10000}
+        \subcaption{$\ell = 10\text{km}$}
+    \end{subfigure}
+    \caption{Posterior mean theft field, $\mathbb{E}_{c_n^*|\tilde{\boldsymbol{c}}}(c_n^*)$, for varying $\ell$.}
+    \label{fig:posterior_mean_field}
+\end{figure}
+
+\begin{figure}
+    \centering
+    \begin{subfigure}{0.3\textwidth}
+        \includegraphics[width=\textwidth]{spatial/error_field_l=100}
+        \subcaption{$\ell = 0.1\text{km}$}
+    \end{subfigure}    
+    \begin{subfigure}{0.3\textwidth}
+        \includegraphics[width=\textwidth]{spatial/error_field_l=1500}
+        \subcaption{$\ell = 1.5\text{km}$}
+    \end{subfigure}    
+    \begin{subfigure}{0.3\textwidth}
+        \includegraphics[width=\textwidth]{spatial/error_field_l=10000}
+        \subcaption{$\ell = 10\text{km}$}
+    \end{subfigure}
+    \caption{Error field for varying $\ell$.}
+    \label{fig:error_field}
+\end{figure}
+
+\subsubsection{Hyperparameter estimation}
+Using the same methods as in Section \ref{sec:hyperparameter_estimation} we can estimate the optimal length scale, $\ell^{\star}$, for the bike theft data. The error and log marginal likelihood for varying $\ell$ are shown in Figure \ref{fig:spatial_mse} and Figure \ref{fig:spatial_marginal_likelihood} respectively. For the mean squared error we see a minimum at $\ell^{\star} \approx 0.4\text{km}$ while with the log marginal likelihood we see a maximum at $\ell^{\star} \approx 1.5\text{km}$ (if you read through the noise). This difference is likely from a combination of two issues, we do not have access to the true latent field and mean squared error is not an accurate measure of the likelihood of a Poisson observation model. Minimising the mean squared error when observations are Gaussian is accurate as this is equivalent to maximising the likelihood. However, this is not the case for Poisson observations. 
+
+One could interpret $\ell$ as the radius of the zone of operation of a typical bike thief. $\ell^{\star} \approx 1.5\text{km}$ is sensible in this context. The estimation of $\ell$ could be further improved by taking a fully Bayesian approach with a prior on $\ell$ to compute its posterior.
+
+\begin{figure}
+    \centering
+    \begin{subfigure}{0.45\textwidth}
+        \includegraphics[width=\textwidth]{spatial/mse}
+        \subcaption{Mean squared error.}
+        \label{fig:spatial_mse}
+    \end{subfigure}
+    \begin{subfigure}{0.45\textwidth}
+        \includegraphics[width=\textwidth]{spatial/log_marginal_likelihood}
+        \subcaption{Log marginal likelihood.}
+        \label{fig:spatial_marginal_likelihood}
+    \end{subfigure}
+    \caption{Hyperparameter, $\ell$, estimation for the spatial data.}
+\end{figure}
+
+\bibliographystyle{plain}
+\bibliography{refs}
+
 \end{document}
