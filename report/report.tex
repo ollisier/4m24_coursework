@@ -4,7 +4,9 @@
 \usepackage{amssymb}
 \usepackage{subcaption}
 \usepackage{graphicx}
-\usepackage[margin=1in]{geometry}
+\usepackage[margin=0.8in]{geometry}
+\usepackage{pdfpages}
+
 
 \graphicspath{{../figures/}}
 \renewcommand{\thesubsection}{\alph{subsection}}
@@ -16,6 +18,9 @@
 \usepackage{hyperref}
 
 \begin{document}
+
+\includepdf[pages={1}]{coversheet}
+\setcounter{page}{1}
 
 \maketitle
 
@@ -123,19 +128,23 @@ Again we only need to compute the log likelihoods up to a constant as we are cal
 
 \begin{figure}
     \centering
-    \begin{subfigure}{0.45\textwidth}
+    \begin{subfigure}{0.3\textwidth}
+        \includegraphics[width=\textwidth]{simulation/data_subsampled}
+        \subcaption{Observed data}
+    \end{subfigure}
+    \begin{subfigure}{0.3\textwidth}
         \includegraphics[width=\textwidth]{simulation/u_error_grw}
         \subcaption{GRW-MH}
     \end{subfigure}
-    \begin{subfigure}{0.45\textwidth}
+    \begin{subfigure}{0.3\textwidth}
         \includegraphics[width=\textwidth]{simulation/u_error_pcn}
         \subcaption{PCN}
     \end{subfigure}
-    \caption{Error of the mean posterior latent surface, $\mathbb{E}(\boldsymbol{u} | \boldsymbol{v})$, to the true $\boldsymbol{u}$ for GRW-MH and PCN}
+    \caption{Observed data (a). Error of the mean posterior latent surface, $\mathbb{E}(\boldsymbol{u} | \boldsymbol{v})$, to the true $\boldsymbol{u}$ for GRW-MH and PCN (b, c)}
     \label{fig:u_error}
 \end{figure}
 
-Figure \ref{fig:u_mean} shows the mean of the posterior latent surface, $\boldsymbol{u} | \boldsymbol{v}$, for both the GRW-MH and PCN algorithms. Both algorithms converge to the same posterior as expected. The error to the true latent surface, shown in Figure \ref{fig:u_error}, is not zero but this is expected as the noise in the observations will prevent perfect recovery of the latent surface.
+Figure \ref{fig:u_mean} shows the mean of the posterior latent surface, $\boldsymbol{u} | \boldsymbol{v}$, for both the GRW-MH and PCN algorithms. Both algorithms converge to the same posterior as expected. The absolute error to the true latent surface, shown in Figure \ref{fig:u_error}, is not zero but this is expected as the noise in the observations will prevent perfect recovery of the latent surface. Also note that the error is larger in regions where there are no observations because the prior is dominates the posterior in these regions.
 
 \begin{figure}
     \centering
@@ -152,7 +161,7 @@ Figure \ref{fig:u_mean} shows the mean of the posterior latent surface, $\boldsy
     \caption{Effect of $\beta$ and $D$ on the acceptance rate and total autocorrelation for GRW-MH and PCN}
 \end{figure}
 
-The acceptance rate of the GRW-MH and PCN algorithms is shown in Figure \ref{fig:acceptance_rate} for varying $\beta$ and dimension, $D$. For both algorithms the acceptance rate approaches 100\% as $\beta \to 0$ and decreases with increasing $\beta$. This is expected as for $\beta = 0$ we have $\boldsymbol{X}' = \boldsymbol{X}$, the proposal is the same as the current state and therefore the acceptance  probability is 1 for both algorithms. However, in this case the proposal is not exploring the space and the algorithm will not converge to the posterior. 
+The acceptance rate of the GRW-MH and PCN algorithms is shown in Figure \ref{fig:acceptance_rate} for varying $\beta$ and dimension, $D$. For both algorithms the acceptance rate approaches 100\% as $\beta \to 0$ and decreases with increasing $\beta$. This is expected as for $\beta = 0$ we have $\boldsymbol{X}' = \boldsymbol{X}$, the proposal is the same as the current state and therefore the acceptance probability is 1 for both algorithms. However, in this case the proposal is not exploring the space and the algorithm will not converge to the posterior. For increasing $\beta$ the proposal distribution can take larger steps and therefore the acceptance rate decreases. With increasing dimension the acceptance rate decreases for both algorithms. This is explained by the fact that higher dimensional spaces have more degrees of freedom and therefore the proposal distribution is less likely to step into a higher probability of the posterior.
 
 If we wish to choose an optimal $\beta$ we could choose the value that minimises the variance of Monte Carlo expectations. If we wish to compute $\mathbb{E}[f(\boldsymbol{X})]$, for some random variable $\boldsymbol{X} \sim \pi$, we can compute a Monte Carlo estimate, $\bar{f} = \frac{1}{T} \sum_{t=1}^{T} f(\boldsymbol{X}^{(t)})$, using samples, $X^{(t)}$, from a Markov chain with invariant measure $\pi$. The variance of this estimate in terms of the autocorrelation coefficient of the chain, $\rho_{f(X)f(X)}(\tau)$, is:
 \begin{equation}
@@ -160,7 +169,7 @@ If we wish to choose an optimal $\beta$ we could choose the value that minimises
 \end{equation}
 Therefore we should choose $\beta$ that minimises $\sum_{\tau=1}^{T-1} (1-\frac{\tau}{T}) \rho_{f(X)f(X)}(\tau)$, which we will name the total autocorrelation.
 
-Figure \ref{fig:autocorrelation} shows how the total auto correlation for $\mathbb{E}_{\boldsymbol{u}|\boldsymbol{v}}[\boldsymbol{u}]$ varies with $\beta$ and $D$. In general for fixed $\beta$ and $D$ GRW-MH has higher total autocorrelation than PCN, this indicates the PCN explores the posterior more efficiently leading to a producing a Monte Carlo estimate with lower variance. Also note that the optimal $\beta$ decreases with increasing dimension for both algorithms. However, based on a rough observation from the Figure \ref{fig:acceptance_rate} we can see that the optimal (minimum total autocorrelation) $\beta$ maintains an acceptance rate of around 20\% for both cases. This is a good rule of thumb, with theoretical backing \cite{sherlock}, for choosing $\beta$ in practice.
+Figure \ref{fig:autocorrelation} shows how the total auto correlation for $\mathbb{E}_{\boldsymbol{u}|\boldsymbol{v}}[\boldsymbol{u}]$ varies with $\beta$ and $D$. In general for fixed $\beta$ and $D$ GRW-MH has higher total autocorrelation than PCN, this indicates the PCN explores the posterior more efficiently leading to a producing a Monte Carlo estimate with lower variance. Also note that the optimal $\beta$ decreases with increasing dimension for both algorithms. However, based on a rough observation from the Figure \ref{fig:acceptance_rate} we can see that the optimal (minimum total autocorrelation) $\beta$ maintains an acceptance rate of around 20\% for both cases. This is a good rule of thumb, with theoretical backing \cite{sherlock}, for choosing $\beta$ in practice. We will use this empirical rule to choose $\beta$ for the remainder of the report.
 
 Finally, we observe that the time per iteration for PCN is 10\% lower than GRW-MH. This is because the PCN algorithm only requires evaluation of the likelihood while the GRW-MH algorithm requires evaluation of the likelihood and prior. Therefore the PCN algorithm is superior in convergence and computational efficiency.
 
@@ -187,7 +196,7 @@ Similarly, the predictive distribution for the observed class assignments is
 \begin{equation}
     p(t_{n}^*=1|\boldsymbol{t}) = \frac{1}{T} \sum_{t=1}^{T} p(t_{n}^*=1 | \boldsymbol{u}^{(t)}) = \frac{1}{T} \sum_{t=1}^{T} \Phi(u^{(t)}_n)
 \end{equation}
-The true class assignments along with the two predictive distributions are shown in Figure \ref{fig:probit}. Notice that the predictive distribution for the observed class assignments is less confident than that of the true class assignments due to the noise in the observations.
+The true class assignments along with the two predictive distributions are shown in Figure \ref{fig:probit}. The predictive distributions broadly follow the shape of the true classifications. Notice that the predictive distribution for the observed class assignments is less confident than that of the true class assignments due to the noise in the observations.
 
 \begin{figure}
     \centering
@@ -229,7 +238,7 @@ This error is not smooth as when the predictive probability crosses the threshol
 \begin{equation}
     e_{smooth}(\ell) = \frac{1}{N}\sum_{n=1}^N (p(t_{n|true}^*=1|\boldsymbol{t}, \ell) - t_{n|true})^2
 \end{equation}
-The optimal length scale, $\ell^{\star}$, is chosen to minimise the error. The error for varying length scale, $\ell$, is shown in Figure \ref{fig:prediction_error}. Both formulations of the error show a minimum at $\ell^{\star} \approx 0.3$ which is the true length scale used to generate the data. However in a real world scenario we can only view the true latent surface through the subsampled and noisy observation model. Also shown in Figure \ref{fig:prediction_error} is the mean prediction error to the our observations. This has a minimum at $\ell^{\star} \approx 0.05$, well below the true length scale, as we are overfitting to the noise in the observations.
+The optimal length scale, $\ell^{\star}$, is chosen to minimise the error. The error for varying length scale, $\ell$, is shown in Figure \ref{fig:prediction_error}. Both formulations of the error show a minimum at $\ell^{\star} \approx 0.3$ which is the true length scale used to generate the data. However in a real world scenario we can only view the true latent surface through the subsampled and noisy observation model. Also shown in Figure \ref{fig:prediction_error} is the mean prediction error to the our observations. This has a minimum at $\ell^{\star} \approx 0.05$, well below the true length scale, as we are overfitting to the noise in the observations and subsampling.
 \begin{figure}
     \centering
     \begin{subfigure}{0.45\textwidth}        
@@ -294,21 +303,24 @@ We can compute the posterior expected number of bike thefts, $\mathbb{E}_{c_n^*|
           &= \frac{1}{T} \sum_{t=1}^{T} \exp(u_n^{(t)})
     \end{aligned}
 \end{equation}
-Here we use the law of conditional expectation to condition the expectation on the rate field, $\boldsymbol{\theta}$, and notice that the expectation of a Poisson random variable is equal to its rate. We can then compute a Monte Carlo estimate for the posterior mean theft field using the samples from the PCN sampler. We have computed the this field and its error to the observations for various $\ell$ in Figures \ref{fig:posterior_mean_field} and \ref{fig:error_field} respectively. For small values of $\ell$ the model only fits at the coordinates of the subsampled data while returning to the prior theft rate of 1 elsewhere. This is not useful for making predictions outside of the subsampled data. For large values of $\ell$ the model only captures the large scale trend of the data, in this case only capturing the North-South variation in the theft rate. A more central value of $\ell$ manages to capture the local variations in theft rate while still being able to make predictions outside of the observations. 
+Here we use the law of conditional expectation to condition the expectation on the rate field, $\boldsymbol{\theta}$, and notice that the expectation of a Poisson random variable is equal to its rate. We can then compute a Monte Carlo estimate for the posterior mean theft field using the samples from the PCN sampler. We have computed the this field and its error to the observations for various $\ell$ in Figures \ref{fig:posterior_mean_field} and \ref{fig:error_field} respectively. For small values $\ell = 100m$ (Figure \ref{fig:posterior_mean_field_l=100}) the model only fits at the coordinates of the subsampled data while returning to the prior theft rate of 1 elsewhere because neighbouring cells are effectively independent. This is not useful for making predictions outside of the subsampled data. For large values $\ell = 10km$ (Figure \ref{fig:posterior_mean_field_l=100}) the model only captures the large scale trend of the data, in this case only capturing the North-South variation in the theft rate. A more modest value $\ell = 1.5km$ (Figure \ref{fig:posterior_mean_field_l=1500}) manages to capture the local variations in theft rate while still being able to make predictions outside of the observations. 
 
 \begin{figure}
     \centering
     \begin{subfigure}{0.3\textwidth}
         \includegraphics[width=\textwidth]{spatial/posterior_mean_field_l=100}
         \subcaption{$\ell = 0.1\text{km}$}
+        \label{fig:posterior_mean_field_l=100}
     \end{subfigure}    
     \begin{subfigure}{0.3\textwidth}
         \includegraphics[width=\textwidth]{spatial/posterior_mean_field_l=1500}
         \subcaption{$\ell = 1.5\text{km}$}
+        \label{fig:posterior_mean_field_l=1500}
     \end{subfigure}    
     \begin{subfigure}{0.3\textwidth}
         \includegraphics[width=\textwidth]{spatial/posterior_mean_field_l=10000}
         \subcaption{$\ell = 10\text{km}$}
+        \label{fig:posterior_mean_field_l=10000}
     \end{subfigure}
     \caption{Posterior mean theft field, $\mathbb{E}_{c_n^*|\tilde{\boldsymbol{c}}}(c_n^*)$, for varying $\ell$.}
     \label{fig:posterior_mean_field}
@@ -335,7 +347,7 @@ Here we use the law of conditional expectation to condition the expectation on t
 \subsubsection{Hyperparameter estimation}
 Using the same methods as in Section \ref{sec:hyperparameter_estimation} we can estimate the optimal length scale, $\ell^{\star}$, for the bike theft data. The error and log marginal likelihood for varying $\ell$ are shown in Figure \ref{fig:spatial_mse} and Figure \ref{fig:spatial_marginal_likelihood} respectively. For the mean squared error we see a minimum at $\ell^{\star} \approx 0.4\text{km}$ while with the log marginal likelihood we see a maximum at $\ell^{\star} \approx 1.5\text{km}$ (if you read through the noise). This difference is likely from a combination of two issues, we do not have access to the true latent field and mean squared error is not an accurate measure of the likelihood of a Poisson observation model. Minimising the mean squared error when observations are Gaussian is accurate as this is equivalent to maximising the likelihood. However, this is not the case for Poisson observations. 
 
-One could interpret $\ell$ as the radius of the zone of operation of a typical bike thief. $\ell^{\star} \approx 1.5\text{km}$ is sensible in this context. The estimation of $\ell$ could be further improved by taking a fully Bayesian approach with a prior on $\ell$ to compute its posterior.
+One could interpret $\ell$ as the radius of the zone of operation of a typical bike thief. $\ell^{\star} \approx 1.5\text{km}$ is sensible in this context. Figure \ref{fig:posterior_mean_field_l=1500} visualises the inferred field for this $\ell$, the model captures the local variations in theft rate without overfitting to individual measurements. The estimation of $\ell$ could be further improved by taking a fully Bayesian approach with a prior on $\ell$ to compute its posterior.
 
 \begin{figure}
     \centering

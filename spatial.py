@@ -79,9 +79,9 @@ def main(fig_folder):
         u0 = Kc@np.random.randn(N)
         u_samples, _ = pcn(lambda u: log_poisson_likelihood(u, c, G), u0, K, T, beta)
         
-        fig = plot_2D(np.mean(np.exp(u_samples), axis=1), xi, yi)
+        fig = plot_2D(np.mean(np.exp(u_samples), axis=1), xi, yi, clim_upper=8)
         fig.savefig(fig_folder / f'posterior_mean_field_l={int(l)}.pdf')
-        fig = plot_2D(np.mean(np.exp(u_samples), axis=1)-data, xi, yi, clim_lower=np.min(np.mean(np.exp(u_samples), axis=1)-data))       
+        fig = plot_2D(np.mean(np.exp(u_samples), axis=1)-data, xi, yi, clim_lower=-7, clim_upper=5)       
         fig.savefig(fig_folder / f'error_field_l={int(l)}.pdf')
         
         

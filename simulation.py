@@ -27,11 +27,11 @@ def generate_data(D, l, subsample_factor):
     
     return x, y, u, v, K, G, idx, N, M
 
-def process_mc_results(x, y, u, u_samples, fig_folder, run):
+def process_mc_results(x, y, xi, yi, u, u_samples, fig_folder, run):
     E_u = np.mean(u_samples, axis=1)
     fig = plot_3D(E_u, x, y)
     fig.savefig(fig_folder / f'u_mean_{run}.pdf')
-    fig = plot_3D(E_u-u, x, y)
+    fig = plot_2D(np.abs(E_u-u), xi, yi)
     fig.savefig(fig_folder / f'u_error_{run}.pdf')
     
 
@@ -218,6 +218,9 @@ def main(fig_folder):
     # Plot data
     fig = plot_result(u, v, x, y, x[idx], y[idx])
     fig.savefig(fig_folder / 'data.pdf')
+    
+    fig = plot_2D(v, xi[idx], yi[idx])
+    fig.savefig(fig_folder / 'data_subsampled.pdf')
 
     # MCMC initialisation
     Kc = np.linalg.cholesky(K + 1e-6 * np.eye(N))
@@ -228,25 +231,25 @@ def main(fig_folder):
     # Mean field inference
     T = 1_000_000
     
-    start = time.time()
-    u_samples_grw, acc_grw = grw(lambda u: log_continuous_target(u, v, K_inverse, G), u0, K, T, 0.2)
-    total_time_grw = time.time() - start
-    print(f'GRW - Acceptance rate: {acc_grw*100}%, Time per iteration: {total_time_grw/T}s')
-    process_mc_results(x, y, u, u_samples_grw, fig_folder, 'grw')
+    # start = time.time()
+    # u_samples_grw, acc_grw = grw(lambda u: log_continuous_target(u, v, K_inverse, G), u0, K, T, 0.2)
+    # total_time_grw = time.time() - start
+    # print(f'GRW - Acceptance rate: {acc_grw*100}%, Time per iteration: {total_time_grw/T}s')
+    # process_mc_results(x, y, xi, yi, u, u_samples_grw, fig_folder, 'grw')
     
-    start = time.time()
-    u_samples_pcn, acc_pcn = pcn(lambda u: log_continuous_likelihood(u, v, G), u0, K, T, 0.4)
-    total_time_pcn = time.time() - start
-    print(f'PCN - Acceptance rate: {acc_pcn*100}%, Time per iteration: {total_time_pcn/T}s')
-    process_mc_results(x, y, u, u_samples_pcn, fig_folder, 'pcn')
+    # start = time.time()
+    # u_samples_pcn, acc_pcn = pcn(lambda u: log_continuous_likelihood(u, v, G), u0, K, T, 0.4)
+    # total_time_pcn = time.time() - start
+    # print(f'PCN - Acceptance rate: {acc_pcn*100}%, Time per iteration: {total_time_pcn/T}s')
+    # process_mc_results(x, y, xi, yi, u, u_samples_pcn, fig_folder, 'pcn')
     
     # Probit observation
     t = probit(v)       # Probit transform of data
     t_true = probit(u)  # Probit transform of latent field
     
-    fig = plot_2D(t, xi[idx], yi[idx])
+    fig = plot_2D(t, xi[idx], yi[idx], clim_lower=0, clim_upper=1)
     fig.savefig(fig_folder / 'probit_observations.pdf')
-    fig = plot_2D(t_true, xi, yi)
+    fig = plot_2D(t_true, xi, yi, clim_lower=0, clim_upper=1)
     fig.savefig(fig_folder / 'probit_true.pdf')
 
     # Probit MCMC
@@ -258,13 +261,13 @@ def main(fig_folder):
     posterior_t_true = predict_t_true(u_samples_probit)
     
     # Plotting
-    fig = plot_2D(posterior_t, xi, yi)
+    fig = plot_2D(posterior_t, xi, yi, clim_lower=0, clim_upper=1)
     fig.savefig(fig_folder / 'probit_predictive_posterior.pdf')
-    fig = plot_2D(posterior_t_true, xi, yi)
+    fig = plot_2D(posterior_t_true, xi, yi, clim_lower=0, clim_upper=1)
     fig.savefig(fig_folder / 'probit_true_posterior.pdf')
-    fig = plot_2D(posterior_t > 0.5, xi, yi)
+    fig = plot_2D(posterior_t > 0.5, xi, yi, clim_lower=0, clim_upper=1)
     fig.savefig(fig_folder / 'probit_predictive_assignments.pdf')
-    fig = plot_2D(posterior_t_true > 0.5, xi, yi)
+    fig = plot_2D(posterior_t_true > 0.5, xi, yi, clim_lower=0, clim_upper=1)
     fig.savefig(fig_folder / 'probit_true_assignments.pdf')
     
     # length scale sweep

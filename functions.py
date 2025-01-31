@@ -200,7 +200,7 @@ def plot_3D(u, x, y, title=None):
     return fig
 
 
-def plot_2D(counts, xi, yi, title=None, colors='viridis', clim_lower=-0.1):
+def plot_2D(counts, xi, yi, title=None, colors='viridis', clim_lower=-0.1, clim_upper=None):
     """Visualise count data given the index lists"""
     Z = clim_lower-np.ones((max(yi) + 1, max(xi) + 1))
     for i in range(len(counts)):
@@ -208,7 +208,8 @@ def plot_2D(counts, xi, yi, title=None, colors='viridis', clim_lower=-0.1):
     my_cmap = copy.copy(cm.get_cmap(colors))
     my_cmap.set_under('k', alpha=0)
     fig, ax = plt.subplots()
-    im = ax.imshow(Z, origin='lower', cmap=my_cmap, clim=[clim_lower, np.max(counts)])
+    clim_upper = np.max(counts) if not clim_upper else clim_upper
+    im = ax.imshow(Z, origin='lower', cmap=my_cmap, clim=[clim_lower, clim_upper])
     ax.set_axis_off()
     fig.colorbar(im)
     fig.tight_layout()
